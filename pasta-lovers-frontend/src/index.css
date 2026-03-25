@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+:root {
+  --pl-green: #4f6b3c;
+  --pl-green-dark: #3d542f;
+  --pl-cream: #f6efe3;
+  --pl-kraft: #d8c3a5;
+  --pl-red: #c63d32;
+  --pl-text: #2e2a26;
+  --pl-muted: #6f685f;
+}
+
+body {
+  font-family: Arial, Helvetica, sans-serif;
+  background: var(--pl-cream);
+  color: var(--pl-text);
+}
+
+.font-brand {
+  font-family: "Trebuchet MS", "Arial Rounded MT Bold", Arial, sans-serif;
+  letter-spacing: 0.02em;
+}
