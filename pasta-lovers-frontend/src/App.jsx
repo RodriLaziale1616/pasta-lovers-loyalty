@@ -3,6 +3,7 @@ import RegisterPage from './pages/RegisterPage'
 import ClientCardPage from './pages/ClientCardPage'
 import StaffLoginPage from './pages/StaffLoginPage'
 import StaffDashboardPage from './pages/StaffDashboardPage'
+import StaffPromotionsPage from './pages/StaffPromotionsPage'
 
 export default function App() {
   return (
@@ -12,6 +13,7 @@ export default function App() {
       <Route path="/card/:token" element={<ClientCardPage />} />
       <Route path="/staff/login" element={<StaffLoginPage />} />
       <Route path="/staff" element={<StaffDashboardPage />} />
+      <Route path="/staff/promotions" element={<StaffPromotionsPage />} />
     </Routes>
   )
 }

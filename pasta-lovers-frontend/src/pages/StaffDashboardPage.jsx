@@ -7,6 +7,7 @@ import {
   getClientByTokenForStaff,
   redeemClient,
 } from '../api/staffClientApi'
+import { searchClients, getClientHistory } from '../api/staffSearchApi'
 import { getStaffToken, removeStaffToken } from '../utils/staffAuth'
 
 export default function StaffDashboardPage() {
@@ -20,6 +21,10 @@ export default function StaffDashboardPage() {
   const [error, setError] = useState('')
   const [loadingClient, setLoadingClient] = useState(false)
   const [actionLoading, setActionLoading] = useState(false)
+
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState([])
+  const [history, setHistory] = useState([])
 
   useEffect(() => {
     const token = getStaffToken()
@@ -90,8 +95,17 @@ export default function StaffDashboardPage() {
     }
   }, [staffUser])
 
+  async function loadHistory(clientId) {
+    try {
+      const data = await getClientHistory(clientId, authToken)
+      setHistory(data.history || [])
+    } catch {
+      setHistory([])
+    }
+  }
+
   async function handleSearchClient(tokenParam) {
-    const tokenToSearch = tokenParam || manualToken
+    const tokenToSearch = (tokenParam || manualToken || '').trim()
 
     if (!tokenToSearch) {
       setError('Ingresá o escaneá un token')
@@ -104,12 +118,40 @@ export default function StaffDashboardPage() {
       setMessage('')
       const data = await getClientByTokenForStaff(tokenToSearch, authToken)
       setClient(data.client)
+      await loadHistory(data.client.id)
     } catch (err) {
       setClient(null)
+      setHistory([])
       setError(err?.response?.data?.message || 'No se pudo encontrar el cliente')
     } finally {
       setLoadingClient(false)
     }
+  }
+
+  async function handleSearchByText() {
+    if (!searchQuery || searchQuery.trim().length < 2) {
+      setError('Ingresá al menos 2 caracteres para buscar')
+      return
+    }
+
+    try {
+      setError('')
+      setMessage('')
+      const data = await searchClients(searchQuery.trim(), authToken)
+      setSearchResults(data.clients || [])
+    } catch {
+      setSearchResults([])
+      setError('Error al buscar clientes')
+    }
+  }
+
+  async function handleSelectClient(selectedClient) {
+    setClient(selectedClient)
+    setManualToken(selectedClient.uniqueToken)
+    setSearchResults([])
+    setMessage('')
+    setError('')
+    await loadHistory(selectedClient.id)
   }
 
   async function handleCheckin() {
@@ -172,12 +214,21 @@ export default function StaffDashboardPage() {
             )}
           </div>
 
-          <button
-            onClick={handleLogout}
-            className="rounded-2xl border border-black/10 bg-white px-4 py-2 text-sm font-semibold text-[var(--pl-text)]"
-          >
-            Salir
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => navigate('/staff/promotions')}
+              className="rounded-2xl bg-[var(--pl-red)] px-4 py-2 text-sm font-semibold text-white"
+            >
+              Crear promoción
+            </button>
+
+            <button
+              onClick={handleLogout}
+              className="rounded-2xl border border-black/10 bg-white px-4 py-2 text-sm font-semibold text-[var(--pl-text)]"
+            >
+              Salir
+            </button>
+          </div>
         </div>
 
         <div className="grid gap-5 md:grid-cols-2">
@@ -188,6 +239,44 @@ export default function StaffDashboardPage() {
             <p className="mt-2 text-sm text-[var(--pl-muted)]">
               Escaneá el QR del cliente o pegá manualmente el token.
             </p>
+
+            <div className="mt-5">
+              <label className="text-sm font-semibold text-[var(--pl-text)]">
+                Buscar por nombre, teléfono o mail
+              </label>
+
+              <input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Ej: Rodrigo o 0981..."
+                className="mt-2 w-full rounded-2xl border border-black/10 bg-[var(--pl-cream)]/45 px-4 py-3 outline-none focus:border-[var(--pl-green)] focus:ring-2 focus:ring-[var(--pl-green)]/15"
+              />
+
+              <button
+                onClick={handleSearchByText}
+                className="mt-3 w-full rounded-2xl bg-black py-3 text-sm font-semibold text-white"
+              >
+                Buscar por texto
+              </button>
+
+              {searchResults.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  {searchResults.map((c) => (
+                    <div
+                      key={c.id}
+                      onClick={() => handleSelectClient(c)}
+                      className="cursor-pointer rounded-2xl border border-black/10 bg-white p-3"
+                    >
+                      <p className="font-semibold text-[var(--pl-text)]">{c.name}</p>
+                      <p className="text-sm text-[var(--pl-muted)]">{c.phone}</p>
+                      <p className="text-xs text-[var(--pl-muted)]">
+                        {c.loyaltyStatus?.currentChecks || 0}/5 checks
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
             <div className="mt-5 overflow-hidden rounded-[24px] border border-black/8">
               <div id="reader" className="bg-white" />
@@ -234,7 +323,7 @@ export default function StaffDashboardPage() {
 
             {!client ? (
               <p className="mt-4 text-sm text-[var(--pl-muted)]">
-                Escaneá una tarjeta o buscá un token para ver la ficha del cliente.
+                Escaneá una tarjeta o buscá un cliente para ver su ficha.
               </p>
             ) : (
               <>
@@ -290,6 +379,31 @@ export default function StaffDashboardPage() {
                     {actionLoading ? 'Procesando...' : 'Canjear premio'}
                   </button>
                 </div>
+
+                {history.length > 0 && (
+                  <div className="mt-5">
+                    <h3 className="font-semibold text-[var(--pl-text)]">Historial</h3>
+
+                    <div className="mt-3 space-y-2">
+                      {history.map((h) => (
+                        <div
+                          key={h.id}
+                          className="rounded-2xl border border-black/10 p-3 text-sm"
+                        >
+                          <p className="font-medium text-[var(--pl-text)]">
+                            {h.type === 'checkin' ? '✔️ Check registrado' : '🎁 Premio canjeado'}
+                          </p>
+                          {h.notes && (
+                            <p className="mt-1 text-xs text-[var(--pl-muted)]">{h.notes}</p>
+                          )}
+                          <p className="mt-1 text-xs text-[var(--pl-muted)]">
+                            {new Date(h.createdAt).toLocaleString()}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </div>

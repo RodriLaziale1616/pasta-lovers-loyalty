@@ -8,7 +8,10 @@ const promotionRoutes = require('./routes/promotion.routes')
 const app = express()
 
 app.use(cors({
-  origin: process.env.FRONTEND_URL,
+  origin: [
+    'http://localhost:5173',
+    process.env.FRONTEND_URL,
+  ],
   credentials: true,
 }))
 

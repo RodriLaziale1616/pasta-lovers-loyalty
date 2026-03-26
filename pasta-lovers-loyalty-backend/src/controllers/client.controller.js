@@ -316,6 +316,76 @@ async function redeemClientReward(req, res) {
     });
   }
 }
+async function searchClients(req, res) {
+  try {
+    const { q } = req.query
+
+    if (!q || q.trim().length < 2) {
+      return res.status(400).json({
+        ok: false,
+        message: 'Ingresá al menos 2 caracteres para buscar',
+      })
+    }
+
+    const query = q.trim()
+
+    const clients = await prisma.client.findMany({
+      where: {
+        isActive: true,
+        OR: [
+          { name: { contains: query, mode: 'insensitive' } },
+          { phone: { contains: query } },
+          { email: { contains: query, mode: 'insensitive' } },
+        ],
+      },
+      include: {
+        loyaltyStatus: true,
+      },
+      take: 10,
+      orderBy: {
+        createdAt: 'desc',
+      },
+    })
+
+    return res.json({
+      ok: true,
+      clients,
+    })
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      message: 'Error al buscar clientes',
+      error: error.message,
+    })
+  }
+}
+
+async function getClientHistory(req, res) {
+  try {
+    const { id } = req.params
+
+    const history = await prisma.loyaltyTransaction.findMany({
+      where: {
+        clientId: Number(id),
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+      take: 20,
+    })
+
+    return res.json({
+      ok: true,
+      history,
+    })
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      message: 'Error al obtener historial',
+      error: error.message,
+    })
+  }
+}
 
 module.exports = {
   registerClient,
@@ -323,4 +393,7 @@ module.exports = {
   getClientByTokenForStaff,
   checkinClient,
   redeemClientReward,
-};
+  searchClients, // 👈 nuevo
+  getClientHistory,
+}
+;
