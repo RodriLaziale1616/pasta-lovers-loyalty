@@ -9,6 +9,8 @@ const {
   getClientByTokenForStaff,
   checkinClient,
   redeemClientReward,
+  searchClients,
+  getClientHistory,
 } = require('../controllers/client.controller');
 
 router.post('/register', registerClient);

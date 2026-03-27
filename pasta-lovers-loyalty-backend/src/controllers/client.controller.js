@@ -396,4 +396,3 @@ module.exports = {
   searchClients, // 👈 nuevo
   getClientHistory,
 }
-;
