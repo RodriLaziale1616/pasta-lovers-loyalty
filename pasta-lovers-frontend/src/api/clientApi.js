@@ -13,3 +13,8 @@ export async function getClientCard(token) {
   const { data } = await api.get(`/clients/card/${token}`)
   return data
 }
+
+export async function recoverClientCard(payload) {
+  const { data } = await api.post('/clients/recover-card', payload)
+  return data
+}

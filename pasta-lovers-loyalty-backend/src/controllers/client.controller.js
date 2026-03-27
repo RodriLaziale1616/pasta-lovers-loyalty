@@ -387,6 +387,58 @@ async function getClientHistory(req, res) {
   }
 }
 
+async function recoverClientCard(req, res) {
+  try {
+    const { phone, name } = req.body
+
+    if (!phone || !name) {
+      return res.status(400).json({
+        ok: false,
+        message: 'Nombre y teléfono son obligatorios',
+      })
+    }
+
+    const client = await prisma.client.findFirst({
+      where: {
+        isActive: true,
+        phone: phone.trim(),
+        name: {
+          equals: name.trim(),
+          mode: 'insensitive',
+        },
+      },
+      include: {
+        loyaltyStatus: true,
+      },
+    })
+
+    if (!client) {
+      return res.status(404).json({
+        ok: false,
+        message: 'No encontramos una tarjeta con esos datos',
+      })
+    }
+
+    return res.json({
+      ok: true,
+      message: 'Tarjeta encontrada',
+      client: {
+        id: client.id,
+        name: client.name,
+        phone: client.phone,
+        uniqueToken: client.uniqueToken,
+        loyaltyStatus: client.loyaltyStatus,
+      },
+    })
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      message: 'Error al recuperar tarjeta',
+      error: error.message,
+    })
+  }
+}
+
 module.exports = {
   registerClient,
   getClientCardByToken,
@@ -395,4 +447,5 @@ module.exports = {
   redeemClientReward,
   searchClients, // 👈 nuevo
   getClientHistory,
+  recoverClientCard,
 }

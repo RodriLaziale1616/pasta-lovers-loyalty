@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import { getClientCard } from '../api/clientApi'
+import { getActivePromotions } from '../api/promotionApi'
 
 function ProgressCircles({ currentChecks }) {
   return (
@@ -63,14 +64,21 @@ export default function ClientCardPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [client, setClient] = useState(null)
+  const [promotions, setPromotions] = useState([])
 
   useEffect(() => {
-    async function loadClientCard() {
+    async function loadData() {
       try {
         setLoading(true)
         setError('')
-        const data = await getClientCard(token)
-        setClient(data.client)
+
+        const [clientData, promotionsData] = await Promise.all([
+          getClientCard(token),
+          getActivePromotions(),
+        ])
+
+        setClient(clientData.client)
+        setPromotions(promotionsData.promotions || [])
       } catch (err) {
         setError(err?.response?.data?.message || 'No se pudo cargar la tarjeta')
       } finally {
@@ -78,7 +86,7 @@ export default function ClientCardPage() {
       }
     }
 
-    loadClientCard()
+    loadData()
   }, [token])
 
   if (loading) {
@@ -167,35 +175,74 @@ export default function ClientCardPage() {
               </div>
             </div>
 
-            <div className="mt-5 rounded-[24px] border border-[var(--pl-red)]/10 bg-[var(--pl-red)]/5 p-5">
-              <p className="font-brand text-xl text-[var(--pl-red)]">
-                Promo de la semana
-              </p>
-              <p className="mt-2 text-sm leading-6 text-[var(--pl-text)]">
-                Muy pronto esta sección va a mostrar flyers, promociones activas
-                y llamados a la acción de Pasta Lovers.
-              </p>
+            {promotions.length > 0 ? (
+              <div className="mt-5 space-y-4">
+                {promotions.map((promo) => (
+                  <div
+                    key={promo.id}
+                    className="rounded-[24px] border border-[var(--pl-red)]/10 bg-[var(--pl-red)]/5 p-5"
+                  >
+                    <p className="font-brand text-xl text-[var(--pl-red)]">
+                      {promo.title}
+                    </p>
 
-              <div className="mt-4 flex flex-col gap-3">
-                <a
-                  href="https://www.instagram.com/pastaloverspy"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="rounded-2xl bg-[var(--pl-green)] px-4 py-3 text-center text-sm font-semibold text-white transition hover:bg-[var(--pl-green-dark)]"
-                >
-                  Ver Instagram
-                </a>
+                    {promo.description && (
+                      <p className="mt-2 text-sm leading-6 text-[var(--pl-text)]">
+                        {promo.description}
+                      </p>
+                    )}
 
-                <a
-                  href="https://wa.me/"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="rounded-2xl border border-[var(--pl-green)]/20 bg-white px-4 py-3 text-center text-sm font-semibold text-[var(--pl-green)] transition hover:bg-[var(--pl-cream)]"
-                >
-                  Pedir por WhatsApp
-                </a>
+                    {promo.imageUrl && (
+                      <img
+                        src={promo.imageUrl}
+                        alt={promo.title}
+                        className="mt-4 w-full rounded-[18px] object-cover"
+                      />
+                    )}
+
+                    {promo.buttonText && promo.buttonLink && (
+                      <a
+                        href={promo.buttonLink}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-4 inline-block rounded-2xl bg-[var(--pl-green)] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[var(--pl-green-dark)]"
+                      >
+                        {promo.buttonText}
+                      </a>
+                    )}
+                  </div>
+                ))}
               </div>
-            </div>
+            ) : (
+              <div className="mt-5 rounded-[24px] border border-[var(--pl-red)]/10 bg-[var(--pl-red)]/5 p-5">
+                <p className="font-brand text-xl text-[var(--pl-red)]">
+                  Promo de la semana
+                </p>
+                <p className="mt-2 text-sm leading-6 text-[var(--pl-text)]">
+                  Pronto estaremos publicando nuevas promos para vos 🍝
+                </p>
+
+                <div className="mt-4 flex flex-col gap-3">
+                  <a
+                    href="https://www.instagram.com/pastaloverspy"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="rounded-2xl bg-[var(--pl-green)] px-4 py-3 text-center text-sm font-semibold text-white transition hover:bg-[var(--pl-green-dark)]"
+                  >
+                    Ver Instagram
+                  </a>
+
+                  <a
+                    href="https://wa.me/"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="rounded-2xl border border-[var(--pl-green)]/20 bg-white px-4 py-3 text-center text-sm font-semibold text-[var(--pl-green)] transition hover:bg-[var(--pl-cream)]"
+                  >
+                    Pedir por WhatsApp
+                  </a>
+                </div>
+              </div>
+            )}
 
             <div className="mt-5 rounded-[24px] bg-[var(--pl-cream)] p-4 text-center">
               <p className="text-xs uppercase tracking-[0.18em] text-[var(--pl-muted)]">

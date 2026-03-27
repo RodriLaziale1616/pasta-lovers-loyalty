@@ -1,7 +1,10 @@
 import { useState } from 'react'
-import { registerClient } from '../api/clientApi'
+import { useNavigate } from 'react-router-dom'
+import { registerClient, recoverClientCard } from '../api/clientApi'
 
 export default function RegisterPage() {
+  const navigate = useNavigate()
+
   const [form, setForm] = useState({
     name: '',
     phone: '',
@@ -10,8 +13,15 @@ export default function RegisterPage() {
     instagramFollowConfirmed: false,
   })
 
+  const [recoverForm, setRecoverForm] = useState({
+    name: '',
+    phone: '',
+  })
+
   const [loading, setLoading] = useState(false)
+  const [recoverLoading, setRecoverLoading] = useState(false)
   const [error, setError] = useState('')
+  const [recoverError, setRecoverError] = useState('')
   const [successData, setSuccessData] = useState(null)
 
   function handleChange(e) {
@@ -19,6 +29,14 @@ export default function RegisterPage() {
     setForm((prev) => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value,
+    }))
+  }
+
+  function handleRecoverChange(e) {
+    const { name, value } = e.target
+    setRecoverForm((prev) => ({
+      ...prev,
+      [name]: value,
     }))
   }
 
@@ -40,10 +58,27 @@ export default function RegisterPage() {
       })
     } catch (err) {
       setError(
-        err?.response?.data?.message || 'Ocurrió un error al registrar el cliente'
+        err?.response?.data?.message || err?.message || 'Ocurrió un error al registrar el cliente'
       )
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function handleRecoverSubmit(e) {
+    e.preventDefault()
+    setRecoverLoading(true)
+    setRecoverError('')
+
+    try {
+      const data = await recoverClientCard(recoverForm)
+      navigate(`/card/${data.client.uniqueToken}`)
+    } catch (err) {
+      setRecoverError(
+        err?.response?.data?.message || err?.message || 'No se pudo recuperar la tarjeta'
+      )
+    } finally {
+      setRecoverLoading(false)
     }
   }
 
@@ -157,8 +192,7 @@ export default function RegisterPage() {
                 className="mt-1 h-4 w-4 accent-[var(--pl-red)]"
               />
               <span>
-                Confirmo que sigo a{' '}
-                <span className="font-semibold">@pastaloverspy</span> en Instagram.
+                Confirmo que sigo a <span className="font-semibold">@pastaloverspy</span> en Instagram.
               </span>
             </label>
 
@@ -195,6 +229,59 @@ export default function RegisterPage() {
               </a>
             </div>
           )}
+
+          <div className="mt-8 border-t border-black/10 pt-6">
+            <h3 className="font-brand text-xl text-[var(--pl-text)]">
+              Ya estoy registrado
+            </h3>
+            <p className="mt-2 text-sm leading-6 text-[var(--pl-muted)]">
+              Ingresá tu nombre completo y teléfono para volver a abrir tu tarjeta.
+            </p>
+
+            <form onSubmit={handleRecoverSubmit} className="mt-4 space-y-4">
+              <div>
+                <label className="mb-1.5 block text-sm font-semibold text-[var(--pl-text)]">
+                  Nombre completo
+                </label>
+                <input
+                  type="text"
+                  name="name"
+                  value={recoverForm.name}
+                  onChange={handleRecoverChange}
+                  placeholder="Tu nombre registrado"
+                  className="w-full rounded-2xl border border-black/10 bg-[var(--pl-cream)]/45 px-4 py-3"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-sm font-semibold text-[var(--pl-text)]">
+                  Número de teléfono
+                </label>
+                <input
+                  type="text"
+                  name="phone"
+                  value={recoverForm.phone}
+                  onChange={handleRecoverChange}
+                  placeholder="Tu número registrado"
+                  className="w-full rounded-2xl border border-black/10 bg-[var(--pl-cream)]/45 px-4 py-3"
+                />
+              </div>
+
+              {recoverError && (
+                <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {recoverError}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={recoverLoading}
+                className="w-full rounded-2xl border border-[var(--pl-green)] bg-white px-4 py-3.5 font-semibold text-[var(--pl-green)]"
+              >
+                {recoverLoading ? 'Buscando tarjeta...' : 'Ingresar a mi tarjeta'}
+              </button>
+            </form>
+          </div>
         </div>
       </div>
     </div>
