@@ -1,6 +1,26 @@
 const prisma = require('../lib/prisma');
 const { v4: uuidv4 } = require('uuid');
 
+function normalizePhone(value) {
+  let digits = String(value || '').replace(/\D/g, '')
+
+  // Accept both Paraguayan local (09...) and international (5959...) formats.
+  if (digits.startsWith('595')) {
+    digits = `0${digits.slice(3)}`
+  }
+
+  return digits
+}
+
+function normalizeName(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLocaleLowerCase('es')
+}
+
 async function registerClient(req, res) {
   try {
     const {
@@ -398,13 +418,23 @@ async function recoverClientCard(req, res) {
       })
     }
 
-    const client = await prisma.client.findFirst({
+    const normalizedPhone = normalizePhone(phone)
+    const normalizedName = normalizeName(name)
+
+    if (normalizedPhone.length < 6 || normalizedName.length < 2) {
+      return res.status(400).json({
+        ok: false,
+        message: 'Ingresá un nombre y teléfono válidos',
+      })
+    }
+
+    // Narrow the lookup with the final digit group, then compare normalized values
+    // in JavaScript. This supports legacy rows saved with spaces, dashes, +595,
+    // duplicated whitespace or accents without exposing a fuzzy name search.
+    const candidates = await prisma.client.findMany({
       where: {
-        isActive: true,
-        phone: phone.trim(),
-        name: {
-          equals: name.trim(),
-          mode: 'insensitive',
+        phone: {
+          contains: normalizedPhone.slice(-3),
         },
       },
       include: {
@@ -412,10 +442,23 @@ async function recoverClientCard(req, res) {
       },
     })
 
+    const client = candidates.find(
+      (candidate) =>
+        normalizePhone(candidate.phone) === normalizedPhone &&
+        normalizeName(candidate.name) === normalizedName
+    )
+
     if (!client) {
       return res.status(404).json({
         ok: false,
         message: 'No encontramos una tarjeta con esos datos',
+      })
+    }
+
+    if (!client.isActive) {
+      return res.status(403).json({
+        ok: false,
+        message: 'La tarjeta está inactiva. Consultá con Pasta Lovers para reactivarla.',
       })
     }
 
