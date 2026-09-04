@@ -4,6 +4,7 @@
   "main": "src/server.js",
   "scripts": {
     "dev": "nodemon src/server.js",
+    "postinstall": "prisma generate",
     "start": "npm run prisma:deploy && npm run seed:modo && npm run seed:admin && node src/server.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
