@@ -8,7 +8,7 @@ import StaffPromotionsPage from './pages/StaffPromotionsPage'
 export default function App() {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/register" replace />} />
+      <Route path="/" element={<Navigate to="/staff/login" replace />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/card/:token" element={<ClientCardPage />} />
       <Route path="/staff/login" element={<StaffLoginPage />} />
