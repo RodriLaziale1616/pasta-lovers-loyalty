@@ -1,7 +1,7 @@
-const express = require('express');
-const router = express.Router();
+const express = require('express')
+const router = express.Router()
 
-const authMiddleware = require('../middleware/auth.middleware');
+const authMiddleware = require('../middleware/auth.middleware')
 
 const {
   registerClient,
@@ -12,16 +12,24 @@ const {
   searchClients,
   getClientHistory,
   recoverClientCard,
-} = require('../controllers/client.controller');
+} = require('../controllers/client.controller')
+const {
+  registerStaffClient,
+  listClientPasses,
+} = require('../controllers/modoClient.controller')
 
-router.post('/register', registerClient);
-router.get('/card/:token', getClientCardByToken);
-
-router.get('/staff/by-token/:token', authMiddleware, getClientByTokenForStaff);
-router.post('/:id/checkin', authMiddleware, checkinClient);
-router.post('/:id/redeem', authMiddleware, redeemClientReward);
+// Modo Cafe staff flows
+router.post('/staff/register', authMiddleware, registerStaffClient)
+router.get('/:id/passes', authMiddleware, listClientPasses)
 router.get('/search', authMiddleware, searchClients)
-router.get('/:id/history', authMiddleware, getClientHistory);
-router.post('/recover-card', recoverClientCard);
+router.get('/staff/by-token/:token', authMiddleware, getClientByTokenForStaff)
 
-module.exports = router;
+// Legacy Pasta Lovers routes kept only while the migration is being tested.
+router.post('/register', registerClient)
+router.get('/card/:token', getClientCardByToken)
+router.post('/:id/checkin', authMiddleware, checkinClient)
+router.post('/:id/redeem', authMiddleware, redeemClientReward)
+router.get('/:id/history', authMiddleware, getClientHistory)
+router.post('/recover-card', recoverClientCard)
+
+module.exports = router
