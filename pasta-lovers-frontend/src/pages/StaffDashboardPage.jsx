@@ -5,8 +5,32 @@ import { useNavigate } from 'react-router-dom'
 import { getMe } from '../api/authApi'
 import { registerModoClient, listClientPasses } from '../api/modoClientApi'
 import { searchClients } from '../api/staffSearchApi'
-import { getPass, issuePass, listPassProducts, redeemPass } from '../api/passApi'
+import {
+  getPass,
+  issuePass,
+  listPassProducts,
+  redeemPass,
+  resolveDynamicQr,
+} from '../api/passApi'
 import { getStaffToken, removeStaffToken } from '../utils/staffAuth'
+
+const STATUS_LABEL = {
+  UNCLAIMED: 'Pendiente de activación',
+  ACTIVE: 'Activo',
+  EXHAUSTED: 'Agotado',
+  EXPIRED: 'Vencido',
+  BLOCKED: 'Bloqueado',
+  CANCELLED: 'Cancelado',
+}
+
+const MOVEMENT_LABEL = {
+  PURCHASE: 'Compra',
+  CLAIM: 'Activación',
+  REDEEM: 'Canje',
+  REFUND: 'Reembolso',
+  ADJUSTMENT: 'Ajuste',
+  REVERSAL: 'Reversión',
+}
 
 function formatMoney(value, currency = 'PYG') {
   if (value == null) return '—'
@@ -19,16 +43,23 @@ function formatMoney(value, currency = 'PYG') {
 
 function balanceLabel(pass) {
   if (!pass) return '—'
-  if (pass.unitType === 'MONEY') {
-    return formatMoney(pass.remainingAmount, pass.product?.currency || 'PYG')
-  }
-  return `${pass.remainingUnits ?? 0} consumos`
+  return pass.unitType === 'MONEY'
+    ? formatMoney(pass.remainingAmount, pass.product?.currency || 'PYG')
+    : `${pass.remainingUnits ?? 0} consumos`
 }
 
-function extractPassId(decodedText) {
-  const raw = String(decodedText || '').trim()
-  if (raw.startsWith('modo-pass:')) return raw.slice('modo-pass:'.length)
+function movementDelta(item, pass) {
+  if (pass.unitType === 'MONEY') {
+    if (item.amountDelta == null) return ''
+    return `${item.amountDelta > 0 ? '+' : ''}${formatMoney(item.amountDelta, pass.product?.currency || 'PYG')}`
+  }
+  if (item.unitsDelta == null) return ''
+  return `${item.unitsDelta > 0 ? '+' : ''}${item.unitsDelta}`
+}
 
+function staticPassId(rawValue) {
+  const raw = String(rawValue || '').trim()
+  if (raw.startsWith('modo-pass:')) return raw.slice('modo-pass:'.length)
   try {
     const parsed = JSON.parse(raw)
     return parsed.publicId || parsed.passId || parsed.id || ''
@@ -73,56 +104,16 @@ export default function StaffDashboardPage() {
 
     setToken(authToken)
 
-    async function bootstrap() {
-      try {
-        const [meData, productsData] = await Promise.all([
-          getMe(authToken),
-          listPassProducts(authToken),
-        ])
+    Promise.all([getMe(authToken), listPassProducts(authToken)])
+      .then(([meData, productsData]) => {
         setStaffUser(meData.user)
         setProducts(productsData.products || [])
-      } catch {
+      })
+      .catch(() => {
         removeStaffToken()
         navigate('/staff/login')
-      }
-    }
-
-    bootstrap()
+      })
   }, [navigate])
-
-  useEffect(() => {
-    if (!scannerOpen || !token) return undefined
-
-    const scanner = new Html5QrcodeScanner(
-      'modo-pass-reader',
-      {
-        fps: 10,
-        qrbox: { width: 230, height: 230 },
-        rememberLastUsedCamera: true,
-      },
-      false,
-    )
-
-    scanner.render(
-      async (decodedText) => {
-        const id = extractPassId(decodedText)
-        if (!id) return
-        setPassPublicId(id)
-        setScannerOpen(false)
-        try {
-          await scanner.clear()
-        } catch {
-          // Camera may already be closing.
-        }
-        await loadPassById(id)
-      },
-      () => {},
-    )
-
-    return () => {
-      scanner.clear().catch(() => {})
-    }
-  }, [scannerOpen, token])
 
   const selectedProduct = useMemo(
     () => products.find((product) => String(product.id) === String(selectedProductId)),
@@ -132,6 +123,41 @@ export default function StaffDashboardPage() {
   useEffect(() => {
     if (!selectedProduct?.isGift) setGiftUnassigned(false)
   }, [selectedProduct])
+
+  useEffect(() => {
+    if (!scannerOpen || !token) return undefined
+
+    const scanner = new Html5QrcodeScanner(
+      'modo-pass-reader',
+      { fps: 10, qrbox: { width: 220, height: 220 }, rememberLastUsedCamera: true },
+      false,
+    )
+
+    scanner.render(
+      async (decodedText) => {
+        try {
+          setError('')
+          setMessage('')
+          if (String(decodedText).startsWith('modo-pass-dynamic:')) {
+            const data = await resolveDynamicQr(decodedText, token)
+            setActivePass(data.pass)
+            setPassPublicId(data.pass.publicId)
+            setRedeemValue(data.pass.unitType === 'MONEY' ? '' : '1')
+          } else {
+            const id = staticPassId(decodedText)
+            if (id) await loadPassById(id)
+          }
+          setScannerOpen(false)
+          await scanner.clear().catch(() => {})
+        } catch (err) {
+          setError(err?.response?.data?.message || 'No pudimos leer este QR.')
+        }
+      },
+      () => {},
+    )
+
+    return () => scanner.clear().catch(() => {})
+  }, [scannerOpen, token])
 
   async function loadClientPasses(client) {
     if (!client?.id) return
@@ -154,19 +180,17 @@ export default function StaffDashboardPage() {
 
   async function handleClientSearch() {
     if (searchQuery.trim().length < 2) {
-      setError('Ingresá al menos 2 caracteres para buscar un cliente.')
+      setError('Ingresá al menos 2 caracteres para buscar.')
       return
     }
-
     try {
       setLoading(true)
       setError('')
-      setMessage('')
       const data = await searchClients(searchQuery.trim(), token)
       setSearchResults(data.clients || [])
       if ((data.clients || []).length === 0) setShowCreateClient(true)
     } catch (err) {
-      setError(err?.response?.data?.message || 'No se pudo buscar clientes.')
+      setError(err?.response?.data?.message || 'No pudimos buscar clientes.')
     } finally {
       setLoading(false)
     }
@@ -180,15 +204,15 @@ export default function StaffDashboardPage() {
       const data = await registerModoClient(newClient, token)
       setNewClient({ name: '', phone: '', email: '' })
       setSearchQuery(data.client.phone)
-      setMessage(`Cliente ${data.client.name} creado correctamente.`)
       await selectClient(data.client)
+      setMessage(`Cliente ${data.client.name} creado correctamente.`)
     } catch (err) {
       const existing = err?.response?.data?.client
       if (existing) {
         await selectClient(existing)
         setMessage('Ese teléfono ya estaba registrado. Seleccionamos el cliente existente.')
       } else {
-        setError(err?.response?.data?.message || 'No se pudo crear el cliente.')
+        setError(err?.response?.data?.message || 'No pudimos crear el cliente.')
       }
     } finally {
       setLoading(false)
@@ -200,9 +224,8 @@ export default function StaffDashboardPage() {
       setError('Seleccioná un tipo de pase.')
       return
     }
-
     if (!giftUnassigned && !selectedClient) {
-      setError('Seleccioná o creá un cliente para este pase.')
+      setError('Seleccioná o creá un cliente.')
       return
     }
 
@@ -216,7 +239,6 @@ export default function StaffDashboardPage() {
         productId: Number(selectedProductId),
         unassignedGift: giftUnassigned,
       }
-
       if (giftUnassigned) {
         payload.purchaserName = purchaser.name
         payload.purchaserPhone = purchaser.phone
@@ -229,13 +251,12 @@ export default function StaffDashboardPage() {
       setPassPublicId(data.pass.publicId)
       setMessage(
         giftUnassigned
-          ? 'Gift Pass vendido. Compartí el QR o enlace de activación con quien lo recibirá.'
-          : `Pase emitido correctamente para ${selectedClient.name}.`,
+          ? 'Gift vendido. Compartí el enlace de activación con quien lo va a recibir.'
+          : `Pase activado para ${selectedClient.name}.`,
       )
-
       if (!giftUnassigned && selectedClient) await loadClientPasses(selectedClient)
     } catch (err) {
-      setError(err?.response?.data?.message || 'No se pudo emitir el pase.')
+      setError(err?.response?.data?.message || 'No pudimos vender el pase.')
     } finally {
       setLoading(false)
     }
@@ -244,32 +265,26 @@ export default function StaffDashboardPage() {
   async function loadPassById(publicId) {
     const id = String(publicId || '').trim()
     if (!id) {
-      setError('Ingresá o escaneá el código del pase.')
+      setError('Ingresá o escaneá un código de pase.')
       return
     }
-
     try {
       setLoading(true)
       setError('')
-      setMessage('')
       const data = await getPass(id, token)
       setActivePass(data.pass)
+      setPassPublicId(data.pass.publicId)
       setRedeemValue(data.pass.unitType === 'MONEY' ? '' : '1')
     } catch (err) {
       setActivePass(null)
-      setError(err?.response?.data?.message || 'No se encontró el pase.')
+      setError(err?.response?.data?.message || 'No encontramos ese pase.')
     } finally {
       setLoading(false)
     }
   }
 
-  async function handleLookupPass() {
-    await loadPassById(passPublicId)
-  }
-
   async function handleRedeem() {
     if (!activePass) return
-
     const value = Number(redeemValue)
     if (!Number.isInteger(value) || value <= 0) {
       setError(activePass.unitType === 'MONEY' ? 'Ingresá un importe válido.' : 'Ingresá una cantidad válida.')
@@ -279,7 +294,6 @@ export default function StaffDashboardPage() {
     try {
       setLoading(true)
       setError('')
-      setMessage('')
       const payload = activePass.unitType === 'MONEY'
         ? { amount: value, notes: 'Canje desde mostrador Modo Café' }
         : { quantity: value, notes: 'Canje desde mostrador Modo Café' }
@@ -287,19 +301,25 @@ export default function StaffDashboardPage() {
       setMessage(data.duplicate ? 'Este canje ya había sido procesado.' : 'Canje realizado correctamente.')
       await loadPassById(activePass.publicId)
     } catch (err) {
-      setError(err?.response?.data?.message || 'No se pudo realizar el canje.')
+      setError(err?.response?.data?.message || 'No pudimos realizar el canje.')
     } finally {
       setLoading(false)
     }
   }
 
-  async function copyText(value) {
+  async function copyText(value, success = 'Copiado al portapapeles.') {
     try {
       await navigator.clipboard.writeText(value)
-      setMessage('Enlace copiado al portapapeles.')
+      setMessage(success)
     } catch {
-      setError('No se pudo copiar automáticamente. Seleccioná el enlace manualmente.')
+      setError('No pudimos copiar automáticamente.')
     }
+  }
+
+  function shareGift() {
+    if (!issuedResult?.claimUrl) return
+    const text = `🎁 Tenés un regalo de Modo Café. Descubrilo acá:\n${issuedResult.claimUrl}`
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer')
   }
 
   function handleLogout() {
@@ -307,115 +327,102 @@ export default function StaffDashboardPage() {
     navigate('/staff/login')
   }
 
+  const clientAccessUrl = issuedResult && !issuedResult.claimUrl && selectedClient
+    ? `${window.location.origin}/acceso?phone=${encodeURIComponent(selectedClient.phone)}`
+    : ''
+
   return (
     <div className="min-h-screen bg-[var(--modo-cream)] text-[var(--modo-ink)]">
-      <header className="border-b border-black/8 bg-[var(--modo-ink)] text-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-5">
-          <div className="flex items-center gap-3">
-            <div className="grid h-11 w-11 place-items-center rounded-full bg-[var(--modo-orange)] text-xl font-black text-[var(--modo-ink)]">M</div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-white/60">Modo Café</p>
-              <h1 className="text-xl font-bold">Pass · Mostrador</h1>
+      <header className="sticky top-0 z-20 bg-[var(--modo-card)] text-white shadow-lg">
+        <div className="modo-shell flex min-h-[76px] items-center justify-between gap-3 py-2.5">
+          <div className="flex min-w-0 items-center gap-3">
+            <img src="/modo-cafe-logo.jpg" alt="Modo Café" className="h-12 w-[84px] shrink-0 rounded-lg bg-white object-contain px-1.5" />
+            <div className="min-w-0">
+              <p className="text-[9px] font-black uppercase tracking-[.2em] text-white/45">Mostrador</p>
+              <h1 className="truncate text-base font-black sm:text-lg">Modo Café Pass</h1>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <span className="hidden text-sm text-white/65 sm:block">{staffUser?.name}</span>
-            <button onClick={handleLogout} className="rounded-xl border border-white/15 px-3 py-2 text-sm font-semibold hover:bg-white/10">Salir</button>
+          <div className="flex shrink-0 items-center gap-2">
+            <span className="hidden max-w-[170px] truncate text-xs text-white/45 md:block">{staffUser?.name}</span>
+            <button onClick={handleLogout} className="rounded-xl border border-white/15 px-3 py-2 text-xs font-black">SALIR</button>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 py-6">
-        <div className="mb-5 grid gap-3 md:grid-cols-4">
-          <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-black/5">
-            <p className="text-xs uppercase tracking-[0.16em] text-black/45">Productos activos</p>
-            <p className="mt-2 text-3xl font-black">{products.length}</p>
-          </div>
-          <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-black/5">
-            <p className="text-xs uppercase tracking-[0.16em] text-black/45">Cliente</p>
-            <p className="mt-2 truncate text-lg font-black">{selectedClient?.name || 'Sin seleccionar'}</p>
-          </div>
-          <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-black/5">
-            <p className="text-xs uppercase tracking-[0.16em] text-black/45">Pases del cliente</p>
-            <p className="mt-2 text-3xl font-black">{clientPasses.length}</p>
-          </div>
-          <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-black/5">
-            <p className="text-xs uppercase tracking-[0.16em] text-black/45">Pase consultado</p>
-            <p className="mt-2 text-lg font-black">{activePass ? balanceLabel(activePass) : '—'}</p>
-          </div>
+      <main className="modo-shell py-4 sm:py-6">
+        <div className="mb-4 grid grid-cols-2 gap-2.5 md:grid-cols-4">
+          {[
+            ['Productos', products.length],
+            ['Cliente', selectedClient?.name || '—'],
+            ['Sus pases', clientPasses.length],
+            ['Pase abierto', activePass ? balanceLabel(activePass) : '—'],
+          ].map(([label, value]) => (
+            <div key={label} className="modo-card min-w-0 p-3 sm:p-4">
+              <p className="text-[9px] font-black uppercase tracking-[.15em] text-black/35">{label}</p>
+              <p className="mt-1 truncate text-base font-black sm:text-lg">{value}</p>
+            </div>
+          ))}
         </div>
 
         {(message || error) && (
-          <div className={`mb-5 rounded-2xl px-4 py-3 text-sm font-medium ${error ? 'bg-red-50 text-red-700 ring-1 ring-red-200' : 'bg-green-50 text-green-800 ring-1 ring-green-200'}`}>
+          <div className={`mb-4 rounded-2xl px-4 py-3 text-sm font-semibold ${error ? 'bg-red-50 text-red-700 ring-1 ring-red-200' : 'bg-white text-[var(--modo-brown)] ring-1 ring-black/5'}`}>
             {error || message}
           </div>
         )}
 
-        <div className="grid gap-5 xl:grid-cols-2">
-          <section className="rounded-[28px] bg-white p-5 shadow-sm ring-1 ring-black/5">
-            <div className="mb-5 flex items-start justify-between gap-3">
+        <div className="grid gap-4 lg:grid-cols-2">
+          <section className="modo-card p-4 sm:p-5">
+            <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--modo-green)]">01 · Venta</p>
-                <h2 className="mt-1 text-2xl font-black">Vender un pase</h2>
+                <p className="text-[10px] font-black uppercase tracking-[.18em] text-[var(--modo-red)]">01 · Venta</p>
+                <h2 className="mt-1 text-xl font-black sm:text-2xl">Vender un pase</h2>
               </div>
-              <button
-                onClick={() => setShowCreateClient((value) => !value)}
-                className="rounded-xl bg-[var(--modo-green)] px-3 py-2 text-sm font-bold text-white"
-              >
-                + Cliente
-              </button>
+              <button onClick={() => setShowCreateClient((v) => !v)} className="modo-btn-secondary px-3 py-2 text-xs">+ CLIENTE</button>
             </div>
 
-            <label className="text-sm font-bold">Buscar cliente</label>
-            <div className="mt-2 flex gap-2">
-              <input
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                onKeyDown={(event) => event.key === 'Enter' && handleClientSearch()}
-                placeholder="Nombre, teléfono o email"
-                className="min-w-0 flex-1 rounded-xl border border-black/10 bg-[var(--modo-cream)] px-4 py-3 outline-none focus:border-[var(--modo-green)]"
-              />
-              <button onClick={handleClientSearch} disabled={loading} className="rounded-xl bg-[var(--modo-ink)] px-4 py-3 text-sm font-bold text-white disabled:opacity-50">Buscar</button>
+            <div className="mt-4 flex gap-2">
+              <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleClientSearch()} placeholder="Nombre, teléfono o email" className="modo-input min-w-0 flex-1" />
+              <button onClick={handleClientSearch} disabled={loading} className="rounded-[15px] bg-[var(--modo-brown)] px-3.5 text-xs font-black text-white disabled:opacity-50">BUSCAR</button>
             </div>
 
             {searchResults.length > 0 && (
-              <div className="mt-3 max-h-44 space-y-2 overflow-auto rounded-2xl border border-black/8 p-2">
+              <div className="mt-2 max-h-44 space-y-1 overflow-auto rounded-2xl border border-black/8 bg-white p-1.5">
                 {searchResults.map((client) => (
-                  <button key={client.id} onClick={() => selectClient(client)} className="w-full rounded-xl px-3 py-3 text-left hover:bg-[var(--modo-cream)]">
-                    <p className="font-bold">{client.name}</p>
-                    <p className="text-sm text-black/50">{client.phone}{client.email ? ` · ${client.email}` : ''}</p>
+                  <button key={client.id} onClick={() => selectClient(client)} className="w-full rounded-xl px-3 py-2.5 text-left hover:bg-[var(--modo-cream)]">
+                    <p className="font-black">{client.name}</p>
+                    <p className="text-xs text-black/45">{client.phone}{client.email ? ` · ${client.email}` : ''}</p>
                   </button>
                 ))}
               </div>
             )}
 
             {showCreateClient && (
-              <form onSubmit={handleCreateClient} className="mt-4 rounded-2xl bg-[var(--modo-orange-soft)] p-4">
-                <p className="font-black">Alta rápida de cliente</p>
-                <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  <input required value={newClient.name} onChange={(e) => setNewClient({ ...newClient, name: e.target.value })} placeholder="Nombre y apellido" className="rounded-xl border border-black/10 bg-white px-3 py-3 outline-none" />
-                  <input required value={newClient.phone} onChange={(e) => setNewClient({ ...newClient, phone: e.target.value })} placeholder="0981 123 456" inputMode="tel" className="rounded-xl border border-black/10 bg-white px-3 py-3 outline-none" />
+              <form onSubmit={handleCreateClient} className="mt-3 rounded-2xl bg-[var(--modo-cream-2)] p-3.5">
+                <p className="text-sm font-black">Alta rápida</p>
+                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                  <input required value={newClient.name} onChange={(e) => setNewClient({ ...newClient, name: e.target.value })} placeholder="Nombre y apellido" className="modo-input bg-white" />
+                  <input required value={newClient.phone} onChange={(e) => setNewClient({ ...newClient, phone: e.target.value })} placeholder="0981 123 456" inputMode="tel" className="modo-input bg-white" />
                 </div>
-                <input type="email" value={newClient.email} onChange={(e) => setNewClient({ ...newClient, email: e.target.value })} placeholder="Email (opcional)" className="mt-2 w-full rounded-xl border border-black/10 bg-white px-3 py-3 outline-none" />
-                <button disabled={loading} className="mt-3 w-full rounded-xl bg-[var(--modo-ink)] px-4 py-3 font-bold text-white disabled:opacity-50">CREAR Y SELECCIONAR</button>
+                <input type="email" value={newClient.email} onChange={(e) => setNewClient({ ...newClient, email: e.target.value })} placeholder="Email (opcional)" className="modo-input mt-2 bg-white" />
+                <button disabled={loading} className="modo-btn-primary mt-2.5 w-full px-4 py-3 disabled:opacity-50">CREAR Y SELECCIONAR</button>
               </form>
             )}
 
             {selectedClient && (
-              <div className="mt-4 rounded-2xl bg-[var(--modo-cream)] p-4">
+              <div className="mt-3 rounded-2xl bg-[var(--modo-cream)] p-3.5">
                 <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.16em] text-black/45">Cliente seleccionado</p>
-                    <p className="mt-1 font-black">{selectedClient.name}</p>
-                    <p className="text-sm text-black/55">{selectedClient.phone}</p>
+                  <div className="min-w-0">
+                    <p className="text-[9px] font-black uppercase tracking-[.15em] text-black/35">Cliente seleccionado</p>
+                    <p className="mt-0.5 truncate font-black">{selectedClient.name}</p>
+                    <p className="text-xs text-black/45">{selectedClient.phone}</p>
                   </div>
-                  <button onClick={() => { setSelectedClient(null); setClientPasses([]) }} className="text-xs font-bold text-black/40">Cambiar</button>
+                  <button onClick={() => { setSelectedClient(null); setClientPasses([]) }} className="text-[10px] font-black text-[var(--modo-red)]">CAMBIAR</button>
                 </div>
                 {clientPasses.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {clientPasses.slice(0, 4).map((pass) => (
-                      <button key={pass.id} onClick={() => { setPassPublicId(pass.publicId); loadPassById(pass.publicId) }} className="rounded-full bg-white px-3 py-1.5 text-xs font-bold ring-1 ring-black/8">
-                        {pass.product.name} · {pass.status}
+                  <div className="mt-2 flex gap-1.5 overflow-x-auto pb-1">
+                    {clientPasses.map((pass) => (
+                      <button key={pass.id} onClick={() => loadPassById(pass.publicId)} className="shrink-0 rounded-full bg-white px-2.5 py-1.5 text-[10px] font-black ring-1 ring-black/6">
+                        {pass.product.name} · {STATUS_LABEL[pass.status] || pass.status}
                       </button>
                     ))}
                   </div>
@@ -423,182 +430,131 @@ export default function StaffDashboardPage() {
               </div>
             )}
 
-            <label className="mt-5 block text-sm font-bold">Tipo de pase</label>
-            <select
-              value={selectedProductId}
-              onChange={(event) => setSelectedProductId(event.target.value)}
-              className="mt-2 w-full rounded-xl border border-black/10 bg-[var(--modo-cream)] px-4 py-3 outline-none focus:border-[var(--modo-green)]"
-            >
-              <option value="">Seleccionar...</option>
+            <label className="mt-4 block text-sm font-black">Tipo de pase</label>
+            <select value={selectedProductId} onChange={(e) => setSelectedProductId(e.target.value)} className="modo-input mt-1.5">
+              <option value="">Seleccionar…</option>
               {products.map((product) => (
-                <option key={product.id} value={product.id}>
-                  {product.name} · {formatMoney(product.salePrice, product.currency)}
-                </option>
+                <option key={product.id} value={product.id}>{product.name} · {formatMoney(product.salePrice, product.currency)}</option>
               ))}
             </select>
 
             {selectedProduct && (
-              <div className="mt-3 rounded-2xl border border-[var(--modo-green)]/20 bg-[var(--modo-green)]/5 p-4 text-sm">
-                <div className="flex items-start justify-between gap-3">
+              <div className="mt-2 rounded-2xl border border-[var(--modo-red)]/10 bg-red-50/30 p-3.5 text-sm">
+                <div className="flex items-start justify-between gap-2">
                   <div>
                     <p className="font-black">{selectedProduct.name}</p>
-                    <p className="mt-1 text-black/55">{selectedProduct.description}</p>
+                    <p className="mt-1 text-xs leading-5 text-black/45">{selectedProduct.description}</p>
                   </div>
-                  {selectedProduct.isGift && <span className="rounded-full bg-[var(--modo-orange)] px-2 py-1 text-xs font-black">GIFT</span>}
+                  {selectedProduct.isGift && <span className="rounded-full bg-[var(--modo-red)] px-2 py-1 text-[9px] font-black text-white">GIFT</span>}
                 </div>
-                <p className="mt-2 font-semibold">
-                  Saldo inicial: {selectedProduct.unitType === 'MONEY' ? formatMoney(selectedProduct.initialAmount, selectedProduct.currency) : `${selectedProduct.initialUnits} consumos`}
-                </p>
+                <p className="mt-2 text-xs font-bold text-[var(--modo-brown)]">Saldo inicial: {selectedProduct.unitType === 'MONEY' ? formatMoney(selectedProduct.initialAmount, selectedProduct.currency) : `${selectedProduct.initialUnits} consumos`}</p>
               </div>
             )}
 
             {selectedProduct?.isGift && (
-              <div className="mt-4 rounded-2xl border border-[var(--modo-orange)]/35 p-4">
+              <div className="mt-3 rounded-2xl border border-black/8 p-3.5">
                 <label className="flex cursor-pointer items-start gap-3">
-                  <input type="checkbox" checked={giftUnassigned} onChange={(e) => setGiftUnassigned(e.target.checked)} className="mt-1 h-4 w-4" />
-                  <span>
-                    <strong>Regalo sin destinatario</strong>
-                    <span className="mt-1 block text-sm text-black/50">El comprador se lleva un QR/link y el amigo se registra cuando lo recibe.</span>
-                  </span>
+                  <input type="checkbox" checked={giftUnassigned} onChange={(e) => setGiftUnassigned(e.target.checked)} className="mt-1" />
+                  <span><strong className="text-sm">Regalo sin destinatario</strong><span className="mt-0.5 block text-xs leading-5 text-black/45">Genera un link para que el amigo lo active después.</span></span>
                 </label>
                 {giftUnassigned && (
-                  <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                    <input value={purchaser.name} onChange={(e) => setPurchaser({ ...purchaser, name: e.target.value })} placeholder="Nombre del comprador (opcional)" className="rounded-xl bg-[var(--modo-cream)] px-3 py-3 outline-none" />
-                    <input value={purchaser.phone} onChange={(e) => setPurchaser({ ...purchaser, phone: e.target.value })} placeholder="Teléfono comprador (opcional)" className="rounded-xl bg-[var(--modo-cream)] px-3 py-3 outline-none" />
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    <input value={purchaser.name} onChange={(e) => setPurchaser({ ...purchaser, name: e.target.value })} placeholder="Comprador (opcional)" className="modo-input" />
+                    <input value={purchaser.phone} onChange={(e) => setPurchaser({ ...purchaser, phone: e.target.value })} placeholder="Teléfono (opcional)" className="modo-input" />
                   </div>
                 )}
               </div>
             )}
 
-            <button
-              onClick={handleIssuePass}
-              disabled={loading || !selectedProductId || (!giftUnassigned && !selectedClient)}
-              className="mt-5 w-full rounded-2xl bg-[var(--modo-orange)] px-4 py-4 text-base font-black text-[var(--modo-ink)] shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              {loading ? 'PROCESANDO…' : giftUnassigned ? 'VENDER GIFT Y GENERAR QR' : 'VENDER Y ACTIVAR PASE'}
+            <button onClick={handleIssuePass} disabled={loading || !selectedProductId || (!giftUnassigned && !selectedClient)} className="modo-btn-primary mt-4 w-full px-4 py-3.5 disabled:opacity-40">
+              {loading ? 'PROCESANDO…' : giftUnassigned ? 'VENDER GIFT Y GENERAR ENLACE' : 'VENDER Y ACTIVAR PASE'}
             </button>
 
             {issuedResult && (
-              <div className="mt-5 rounded-3xl bg-[var(--modo-ink)] p-5 text-white">
-                <p className="text-xs uppercase tracking-[0.18em] text-white/50">Venta completada</p>
-                <h3 className="mt-1 text-xl font-black">{issuedResult.pass.product?.name || selectedProduct?.name}</h3>
+              <div className="modo-premium-card mt-4 p-4">
+                <p className="text-[9px] font-black uppercase tracking-[.18em] text-white/40">Venta completada</p>
+                <h3 className="mt-1 text-lg font-black">{issuedResult.pass.product?.name || selectedProduct?.name}</h3>
 
                 {issuedResult.claimUrl ? (
-                  <div className="mt-5 grid gap-5 sm:grid-cols-[190px_1fr] sm:items-center">
-                    <div className="w-fit rounded-2xl bg-white p-3">
-                      <QRCodeSVG value={issuedResult.claimUrl} size={165} />
-                    </div>
+                  <div className="mt-4 grid gap-4 sm:grid-cols-[150px_1fr] sm:items-center">
+                    <div className="mx-auto w-fit rounded-2xl bg-white p-2.5 sm:mx-0"><QRCodeSVG value={issuedResult.claimUrl} size={130} /></div>
                     <div>
-                      <p className="font-bold">QR de activación del regalo</p>
-                      <p className="mt-1 text-sm text-white/55">Podés mostrarlo, imprimirlo o enviar el enlace por WhatsApp.</p>
-                      <button onClick={() => copyText(issuedResult.claimUrl)} className="mt-3 rounded-xl bg-white px-3 py-2 text-sm font-black text-[var(--modo-ink)]">COPIAR ENLACE</button>
+                      <p className="text-sm font-black">Enlace de regalo</p>
+                      <p className="mt-1 text-xs leading-5 text-white/45">“🎁 Tenés un regalo de Modo Café. Descubrilo acá:”</p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button onClick={shareGift} className="modo-btn-primary px-3 py-2 text-xs">WHATSAPP</button>
+                        <button onClick={() => copyText(`🎁 Tenés un regalo de Modo Café. Descubrilo acá:\n${issuedResult.claimUrl}`, 'Mensaje de regalo copiado.')} className="modo-btn-secondary px-3 py-2 text-xs">COPIAR MENSAJE</button>
+                      </div>
                     </div>
                   </div>
-                ) : (
-                  <div className="mt-5 flex flex-col items-center rounded-2xl bg-white/5 p-4 text-center">
-                    <div className="rounded-2xl bg-white p-3">
-                      <QRCodeSVG value={`modo-pass:${issuedResult.pass.publicId}`} size={165} />
+                ) : clientAccessUrl ? (
+                  <div className="mt-4 grid gap-4 sm:grid-cols-[150px_1fr] sm:items-center">
+                    <div className="mx-auto w-fit rounded-2xl bg-white p-2.5 sm:mx-0"><QRCodeSVG value={clientAccessUrl} size={130} /></div>
+                    <div>
+                      <p className="text-sm font-black">QR de acceso a Mi Pase</p>
+                      <p className="mt-1 text-xs leading-5 text-white/45">El cliente lo escanea y entra con su teléfono + código OTP. No expone el saldo.</p>
+                      <button onClick={() => copyText(clientAccessUrl, 'Enlace de acceso copiado.')} className="modo-btn-secondary mt-3 px-3 py-2 text-xs">COPIAR ACCESO</button>
                     </div>
-                    <p className="mt-3 text-sm text-white/60">QR identificador del pase para caja.</p>
                   </div>
-                )}
+                ) : null}
               </div>
             )}
           </section>
 
-          <section className="rounded-[28px] bg-white p-5 shadow-sm ring-1 ring-black/5">
-            <div className="mb-5 flex items-start justify-between gap-3">
+          <section className="modo-card p-4 sm:p-5">
+            <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--modo-green)]">02 · Consumo</p>
-                <h2 className="mt-1 text-2xl font-black">Escanear y canjear</h2>
-                <p className="mt-1 text-sm text-black/50">Leé el QR del cliente o ingresá el código manualmente.</p>
+                <p className="text-[10px] font-black uppercase tracking-[.18em] text-[var(--modo-red)]">02 · Consumo</p>
+                <h2 className="mt-1 text-xl font-black sm:text-2xl">Escanear y canjear</h2>
+                <p className="mt-1 text-xs leading-5 text-black/45">Acepta el QR dinámico del cliente o el código manual.</p>
               </div>
-              <button onClick={() => setScannerOpen((value) => !value)} className="rounded-xl bg-[var(--modo-green)] px-3 py-2 text-sm font-bold text-white">
-                {scannerOpen ? 'Cerrar cámara' : 'ESCANEAR QR'}
-              </button>
+              <button onClick={() => setScannerOpen((v) => !v)} className="modo-btn-secondary shrink-0 px-3 py-2 text-xs">{scannerOpen ? 'CERRAR' : 'ESCANEAR QR'}</button>
             </div>
 
-            {scannerOpen && (
-              <div className="mb-5 overflow-hidden rounded-3xl border border-black/10 bg-white p-2">
-                <div id="modo-pass-reader" />
-              </div>
-            )}
+            {scannerOpen && <div className="mt-4 overflow-hidden rounded-2xl border border-black/8 bg-white p-1.5"><div id="modo-pass-reader" /></div>}
 
-            <label className="text-sm font-bold">Código del pase</label>
-            <div className="mt-2 flex gap-2">
-              <input
-                value={passPublicId}
-                onChange={(event) => setPassPublicId(event.target.value)}
-                onKeyDown={(event) => event.key === 'Enter' && handleLookupPass()}
-                placeholder="UUID / modo-pass:..."
-                className="min-w-0 flex-1 rounded-xl border border-black/10 bg-[var(--modo-cream)] px-4 py-3 font-mono text-sm outline-none focus:border-[var(--modo-green)]"
-              />
-              <button onClick={handleLookupPass} disabled={loading} className="rounded-xl bg-[var(--modo-ink)] px-4 py-3 text-sm font-bold text-white disabled:opacity-50">Consultar</button>
+            <div className="mt-4 flex gap-2">
+              <input value={passPublicId} onChange={(e) => setPassPublicId(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && loadPassById(passPublicId)} placeholder="Código del pase" className="modo-input min-w-0 flex-1 font-mono text-xs" />
+              <button onClick={() => loadPassById(passPublicId)} disabled={loading} className="rounded-[15px] bg-[var(--modo-brown)] px-3.5 text-xs font-black text-white disabled:opacity-50">CONSULTAR</button>
             </div>
 
             {!activePass ? (
-              <div className="mt-5 grid min-h-72 place-items-center rounded-3xl border border-dashed border-black/15 bg-[var(--modo-cream)]/50 p-8 text-center">
-                <div>
-                  <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-white text-2xl shadow-sm">▦</div>
-                  <p className="mt-4 font-black">Esperando un pase</p>
-                  <p className="mt-1 text-sm text-black/45">Escaneá el QR para ver titular, producto y saldo.</p>
-                </div>
+              <div className="mt-4 grid min-h-[230px] place-items-center rounded-[22px] border border-dashed border-black/12 bg-[var(--modo-cream)]/60 p-6 text-center">
+                <div><div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-white text-2xl shadow-sm">☕</div><p className="mt-3 font-black">Esperando un pase</p><p className="mt-1 text-xs leading-5 text-black/40">Escaneá el QR para ver saldo y confirmar el canje.</p></div>
               </div>
             ) : (
-              <div className="mt-5">
-                <div className="overflow-hidden rounded-3xl bg-[var(--modo-ink)] text-white">
-                  <div className="border-b border-white/10 p-5">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <p className="text-xs uppercase tracking-[0.18em] text-white/50">Modo Café Pass</p>
-                        <h3 className="mt-1 text-xl font-black">{activePass.product?.name}</h3>
-                        <p className="mt-1 text-sm text-white/60">{activePass.client?.name || 'Sin destinatario'}</p>
-                        {activePass.client?.phone && <p className="text-xs text-white/45">{activePass.client.phone}</p>}
+              <div className="mt-4">
+                <div className="modo-premium-card overflow-hidden">
+                  <div className="border-b border-white/10 p-4 sm:p-5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-[9px] font-black uppercase tracking-[.18em] text-white/40">Modo Café Pass</p>
+                        <h3 className="mt-1 truncate text-lg font-black">{activePass.product?.name}</h3>
+                        <p className="mt-1 text-xs text-white/50">{activePass.client?.name || 'Sin destinatario'}{activePass.client?.phone ? ` · ${activePass.client.phone}` : ''}</p>
                       </div>
-                      <span className={`rounded-full px-3 py-1 text-xs font-black ${activePass.status === 'ACTIVE' ? 'bg-green-400/20 text-green-200' : 'bg-white/10 text-white/60'}`}>{activePass.status}</span>
+                      <span className="shrink-0 rounded-full bg-[var(--modo-red)] px-2.5 py-1 text-[9px] font-black text-white">{STATUS_LABEL[activePass.status] || activePass.status}</span>
                     </div>
-                  </div>
-                  <div className="p-5">
-                    <p className="text-xs uppercase tracking-[0.18em] text-white/45">Saldo disponible</p>
-                    <p className="mt-2 text-4xl font-black">{balanceLabel(activePass)}</p>
+                    <p className="mt-4 text-[9px] font-black uppercase tracking-[.18em] text-white/35">Saldo disponible</p>
+                    <p className="mt-1 text-3xl font-black">{balanceLabel(activePass)}</p>
                   </div>
                 </div>
 
                 {activePass.status === 'ACTIVE' && (
-                  <div className="mt-5 rounded-2xl bg-[var(--modo-cream)] p-4">
-                    <label className="text-sm font-bold">{activePass.unitType === 'MONEY' ? 'Importe a descontar (Gs.)' : 'Cantidad a canjear'}</label>
-                    <input
-                      type="number"
-                      min="1"
-                      step="1"
-                      value={redeemValue}
-                      onChange={(event) => setRedeemValue(event.target.value)}
-                      className="mt-2 w-full rounded-xl border border-black/10 bg-white px-4 py-3 text-lg font-black outline-none focus:border-[var(--modo-green)]"
-                      placeholder={activePass.unitType === 'MONEY' ? 'Ej: 33000' : '1'}
-                    />
-                    <button onClick={handleRedeem} disabled={loading} className="mt-3 w-full rounded-2xl bg-[var(--modo-green)] px-4 py-4 font-black text-white disabled:opacity-50">
-                      {loading ? 'PROCESANDO…' : activePass.unitType === 'MONEY' ? `DESCONTAR ${redeemValue ? formatMoney(Number(redeemValue)) : ''}` : `CANJEAR ${redeemValue || 1}`}
-                    </button>
+                  <div className="mt-3 rounded-2xl bg-[var(--modo-cream)] p-3.5">
+                    <label className="text-sm font-black">{activePass.unitType === 'MONEY' ? 'Importe a descontar' : 'Cantidad a canjear'}</label>
+                    <input value={redeemValue} onChange={(e) => setRedeemValue(e.target.value.replace(/\D/g, ''))} inputMode="numeric" placeholder={activePass.unitType === 'MONEY' ? 'Ej. 25000' : '1'} className="modo-input mt-2 bg-white text-lg font-black" />
+                    <button onClick={handleRedeem} disabled={loading} className="modo-btn-primary mt-2.5 w-full px-4 py-3.5 disabled:opacity-50">{loading ? 'PROCESANDO…' : activePass.unitType === 'MONEY' ? 'DESCONTAR SALDO' : `CANJEAR ${redeemValue || '1'}`}</button>
                   </div>
                 )}
 
                 {activePass.transactions?.length > 0 && (
-                  <div className="mt-5">
-                    <h4 className="font-black">Últimos movimientos</h4>
-                    <div className="mt-2 space-y-2">
-                      {activePass.transactions.map((transaction) => (
-                        <div key={transaction.id} className="flex items-center justify-between gap-3 rounded-xl border border-black/8 px-3 py-3 text-sm">
-                          <div>
-                            <p className="font-bold">{transaction.type}</p>
-                            <p className="text-xs text-black/45">{new Date(transaction.createdAt).toLocaleString('es-PY')}</p>
-                          </div>
-                          <span className="font-black">
-                            {transaction.amountDelta != null
-                              ? formatMoney(transaction.amountDelta, activePass.product?.currency)
-                              : transaction.unitsDelta != null
-                                ? `${transaction.unitsDelta > 0 ? '+' : ''}${transaction.unitsDelta}`
-                                : '—'}
-                          </span>
+                  <div className="mt-4">
+                    <h3 className="text-sm font-black">Últimos movimientos</h3>
+                    <div className="mt-2 space-y-1.5">
+                      {activePass.transactions.map((item) => (
+                        <div key={item.id} className="flex items-center justify-between gap-3 rounded-xl border border-black/7 bg-white px-3 py-2.5">
+                          <div><p className="text-sm font-black">{MOVEMENT_LABEL[item.type] || item.type}</p><p className="text-[10px] text-black/35">{new Date(item.createdAt).toLocaleString('es-PY')}</p></div>
+                          <span className="text-sm font-black">{movementDelta(item, activePass)}</span>
                         </div>
                       ))}
                     </div>
