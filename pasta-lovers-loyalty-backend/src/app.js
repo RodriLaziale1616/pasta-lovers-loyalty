@@ -3,12 +3,13 @@ const cors = require('cors')
 const prisma = require('./lib/prisma')
 const authRoutes = require('./routes/auth.routes')
 const clientRoutes = require('./routes/client.routes')
+const clientAuthRoutes = require('./routes/clientAuth.routes')
 const promotionRoutes = require('./routes/promotion.routes')
 const passRoutes = require('./routes/pass.routes')
 
 const app = express()
 
-// Railway terminates TLS before forwarding requests to the application.
+// Railway termina TLS antes de reenviar el request a Node.
 app.set('trust proxy', 1)
 app.disable('x-powered-by')
 
@@ -52,6 +53,7 @@ app.get('/health', async (req, res) => {
 })
 
 app.use('/auth', authRoutes)
+app.use('/client-auth', clientAuthRoutes)
 app.use('/clients', clientRoutes)
 app.use('/promotions', promotionRoutes)
 app.use('/passes', passRoutes)
