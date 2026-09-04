@@ -1,20 +1,23 @@
 @import "tailwindcss";
 
 :root {
-  --modo-green: #5f7143;
-  --modo-green-dark: #465532;
-  --modo-orange: #d69a52;
-  --modo-orange-soft: #f3dfc4;
-  --modo-cream: #f6f0e6;
-  --modo-ink: #29251f;
-  --modo-muted: #756d63;
+  --modo-red: #c51f29;
+  --modo-red-dark: #9f1720;
+  --modo-cream: #f6efe4;
+  --modo-cream-2: #efe2cf;
+  --modo-beige: #d8bea0;
+  --modo-brown: #5a4032;
+  --modo-ink: #2b211b;
+  --modo-muted: #776b62;
+  --modo-card: #28211b;
+  --modo-success: #2f6d49;
 
-  /* Legacy aliases kept while the old customer pages are migrated. */
-  --pl-green: var(--modo-green);
-  --pl-green-dark: var(--modo-green-dark);
+  /* aliases temporales mientras se termina de migrar cualquier vista legacy */
+  --pl-green: var(--modo-brown);
+  --pl-green-dark: #483227;
   --pl-cream: var(--modo-cream);
-  --pl-kraft: #d8c3a5;
-  --pl-red: #b95f49;
+  --pl-kraft: var(--modo-beige);
+  --pl-red: var(--modo-red);
   --pl-text: var(--modo-ink);
   --pl-muted: var(--modo-muted);
 }
@@ -23,13 +26,21 @@
   box-sizing: border-box;
 }
 
+html {
+  background: var(--modo-cream);
+}
+
 body {
   margin: 0;
   min-width: 320px;
+  min-height: 100vh;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background: var(--modo-cream);
+  background:
+    radial-gradient(circle at top right, rgba(197, 31, 41, 0.05), transparent 30%),
+    var(--modo-cream);
   color: var(--modo-ink);
   -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
 }
 
 button,
@@ -39,7 +50,126 @@ textarea {
   font: inherit;
 }
 
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+img {
+  max-width: 100%;
+}
+
 .font-brand {
   font-family: Georgia, "Times New Roman", serif;
   letter-spacing: 0.01em;
+}
+
+.modo-shell {
+  width: min(100% - 24px, 1180px);
+  margin-inline: auto;
+}
+
+.modo-card {
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(43, 33, 27, 0.07);
+  box-shadow: 0 12px 30px rgba(69, 44, 28, 0.06);
+}
+
+.modo-premium-card {
+  border-radius: 24px;
+  background: var(--modo-card);
+  color: white;
+  box-shadow: 0 18px 40px rgba(43, 33, 27, 0.16);
+}
+
+.modo-btn-primary {
+  border-radius: 15px;
+  background: var(--modo-red);
+  color: white;
+  font-weight: 800;
+  transition: transform 160ms ease, background 160ms ease;
+}
+
+.modo-btn-primary:hover {
+  background: var(--modo-red-dark);
+  transform: translateY(-1px);
+}
+
+.modo-btn-secondary {
+  border-radius: 15px;
+  background: var(--modo-beige);
+  color: var(--modo-ink);
+  font-weight: 800;
+}
+
+.modo-input {
+  width: 100%;
+  border-radius: 15px;
+  border: 1px solid rgba(43, 33, 27, 0.1);
+  background: #fffaf4;
+  padding: 0.8rem 0.95rem;
+  outline: none;
+}
+
+.modo-input:focus {
+  border-color: rgba(197, 31, 41, 0.55);
+  box-shadow: 0 0 0 3px rgba(197, 31, 41, 0.08);
+}
+
+@keyframes gift-bob {
+  0%, 100% { transform: translateY(0) rotate(-1deg); }
+  50% { transform: translateY(-7px) rotate(1deg); }
+}
+
+@keyframes gift-lid-open {
+  0% { transform: translate(-50%, 0) rotate(0); }
+  55% { transform: translate(-50%, -12px) rotate(-8deg); }
+  100% { transform: translate(-58%, -34px) rotate(-20deg); }
+}
+
+@keyframes gift-box-pop {
+  0% { transform: scale(0.96); }
+  65% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+@keyframes confetti-fall {
+  0% { opacity: 0; transform: translate3d(0, -18px, 0) rotate(0deg); }
+  10% { opacity: 1; }
+  100% { opacity: 0; transform: translate3d(var(--x), 150px, 0) rotate(440deg); }
+}
+
+.gift-box-idle {
+  animation: gift-bob 2.5s ease-in-out infinite;
+}
+
+.gift-box-open {
+  animation: gift-box-pop 420ms ease-out both;
+}
+
+.gift-box-open .gift-lid {
+  animation: gift-lid-open 620ms cubic-bezier(.2,.8,.2,1) both;
+}
+
+.confetti-piece {
+  position: absolute;
+  top: 38%;
+  left: 50%;
+  width: 8px;
+  height: 14px;
+  border-radius: 3px;
+  background: var(--modo-red);
+  animation: confetti-fall 1.6s ease-out both;
+  animation-delay: var(--delay);
+}
+
+@media (max-width: 640px) {
+  .modo-shell {
+    width: min(100% - 16px, 1180px);
+  }
+
+  .modo-card,
+  .modo-premium-card {
+    border-radius: 18px;
+  }
 }
