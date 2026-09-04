@@ -29,8 +29,30 @@ async function resolveDynamicQr(req, res) {
       })
     }
 
-    if (payload.type !== 'MODO_PASS_QR' || !payload.passId || !payload.clientId) {
+    if (
+      payload.type !== 'MODO_PASS_QR' ||
+      !payload.passId ||
+      !payload.clientId ||
+      !payload.sessionId
+    ) {
       return res.status(400).json({ ok: false, message: 'QR inválido' })
+    }
+
+    const session = await prisma.clientSession.findFirst({
+      where: {
+        id: String(payload.sessionId),
+        clientId: Number(payload.clientId),
+        revokedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      select: { id: true },
+    })
+
+    if (!session) {
+      return res.status(410).json({
+        ok: false,
+        message: 'La sesión que generó este QR ya no está activa.',
+      })
     }
 
     const pass = await prisma.pass.findFirst({
