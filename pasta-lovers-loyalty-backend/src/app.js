@@ -4,6 +4,7 @@ const prisma = require('./lib/prisma')
 const authRoutes = require('./routes/auth.routes')
 const clientRoutes = require('./routes/client.routes')
 const promotionRoutes = require('./routes/promotion.routes')
+const passRoutes = require('./routes/pass.routes')
 
 const app = express()
 
@@ -11,7 +12,7 @@ app.use(cors({
   origin: [
     'http://localhost:5173',
     process.env.FRONTEND_URL,
-  ],
+  ].filter(Boolean),
   credentials: true,
 }))
 
@@ -22,7 +23,7 @@ app.get('/health', async (req, res) => {
     await prisma.$queryRaw`SELECT 1`
     return res.json({
       ok: true,
-      message: 'Pasta Lovers Loyalty API funcionando',
+      message: 'Modo Cafe Pass API funcionando',
       database: 'connected',
     })
   } catch (error) {
@@ -37,5 +38,6 @@ app.get('/health', async (req, res) => {
 app.use('/auth', authRoutes)
 app.use('/clients', clientRoutes)
 app.use('/promotions', promotionRoutes)
+app.use('/passes', passRoutes)
 
 module.exports = app
