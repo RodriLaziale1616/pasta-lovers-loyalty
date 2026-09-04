@@ -42,3 +42,16 @@ export async function redeemPass(publicId, payload = {}, token) {
   )
   return data
 }
+
+export async function previewGift(token) {
+  const { data } = await api.get(`/passes/gifts/claim/${encodeURIComponent(token)}`)
+  return data
+}
+
+export async function claimGift(token, payload) {
+  const { data } = await api.post(
+    `/passes/gifts/claim/${encodeURIComponent(token)}`,
+    payload,
+  )
+  return data
+}
