@@ -8,6 +8,7 @@ datasource db {
 }
 
 enum PassStatus {
+  UNCLAIMED
   ACTIVE
   EXHAUSTED
   EXPIRED
@@ -22,6 +23,7 @@ enum PassUnitType {
 
 enum PassTransactionType {
   PURCHASE
+  CLAIM
   REDEEM
   REFUND
   ADJUSTMENT
@@ -85,6 +87,7 @@ model PassProduct {
   salePrice       Int
   currency        String       @default("PYG")
   validityDays    Int?
+  isGift          Boolean      @default(false)
   isActive        Boolean      @default(true)
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
@@ -92,12 +95,13 @@ model PassProduct {
   passes          Pass[]
 
   @@index([isActive])
+  @@index([isGift, isActive])
 }
 
 model Pass {
   id              Int          @id @default(autoincrement())
   publicId        String       @unique
-  clientId        Int
+  clientId        Int?
   productId       Int
   status          PassStatus   @default(ACTIVE)
   unitType        PassUnitType
@@ -109,36 +113,42 @@ model Pass {
   expiresAt       DateTime?
   blockedAt       DateTime?
   cancelledAt     DateTime?
+  claimTokenHash  String?      @unique
+  claimExpiresAt  DateTime?
+  claimedAt       DateTime?
+  purchaserName   String?
+  purchaserPhone  String?
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
-  client          Client       @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  client          Client?      @relation(fields: [clientId], references: [id], onDelete: Restrict)
   product         PassProduct  @relation(fields: [productId], references: [id], onDelete: Restrict)
   transactions    PassTransaction[]
 
   @@index([clientId, status])
   @@index([productId, status])
   @@index([expiresAt])
+  @@index([claimExpiresAt])
 }
 
 model PassTransaction {
-  id               Int                 @id @default(autoincrement())
-  passId           Int
-  type             PassTransactionType
-  unitsDelta       Int?
-  amountDelta      Int?
-  balanceUnitsAfter Int?
+  id                 Int                 @id @default(autoincrement())
+  passId             Int
+  type               PassTransactionType
+  unitsDelta         Int?
+  amountDelta        Int?
+  balanceUnitsAfter  Int?
   balanceAmountAfter Int?
-  idempotencyKey   String              @unique
-  notes            String?
-  createdByUserId  Int?
-  reversedById     Int?                @unique
-  createdAt        DateTime            @default(now())
+  idempotencyKey     String              @unique
+  notes              String?
+  createdByUserId    Int?
+  reversedById       Int?                @unique
+  createdAt          DateTime            @default(now())
 
-  pass             Pass                @relation(fields: [passId], references: [id], onDelete: Restrict)
-  createdByUser    StaffUser?          @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
-  reversalOf       PassTransaction?    @relation("TransactionReversal", fields: [reversedById], references: [id])
-  reversedBy       PassTransaction?    @relation("TransactionReversal")
+  pass               Pass                @relation(fields: [passId], references: [id], onDelete: Restrict)
+  createdByUser      StaffUser?          @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  reversalOf         PassTransaction?    @relation("TransactionReversal", fields: [reversedById], references: [id])
+  reversedBy         PassTransaction?    @relation("TransactionReversal")
 
   @@index([passId, createdAt])
   @@index([createdByUserId, createdAt])
