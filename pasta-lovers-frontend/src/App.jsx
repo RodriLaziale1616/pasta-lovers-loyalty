@@ -4,11 +4,13 @@ import ClientCardPage from './pages/ClientCardPage'
 import StaffLoginPage from './pages/StaffLoginPage'
 import StaffDashboardPage from './pages/StaffDashboardPage'
 import StaffPromotionsPage from './pages/StaffPromotionsPage'
+import GiftClaimPage from './pages/GiftClaimPage'
 
 export default function App() {
   return (
     <Routes>
       <Route path="/" element={<Navigate to="/staff/login" replace />} />
+      <Route path="/gift/claim/:token" element={<GiftClaimPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/card/:token" element={<ClientCardPage />} />
       <Route path="/staff/login" element={<StaffLoginPage />} />
