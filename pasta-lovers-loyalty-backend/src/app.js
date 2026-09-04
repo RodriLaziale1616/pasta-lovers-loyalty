@@ -8,15 +8,32 @@ const passRoutes = require('./routes/pass.routes')
 
 const app = express()
 
+// Railway terminates TLS before forwarding requests to the application.
+app.set('trust proxy', 1)
+app.disable('x-powered-by')
+
+app.use((req, res, next) => {
+  res.set('X-Content-Type-Options', 'nosniff')
+  res.set('X-Frame-Options', 'DENY')
+  res.set('Referrer-Policy', 'no-referrer')
+  res.set('Cache-Control', 'no-store')
+  res.set('Permissions-Policy', 'geolocation=(), microphone=()')
+  if (process.env.NODE_ENV === 'production') {
+    res.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+  }
+  next()
+})
+
 app.use(cors({
   origin: [
     'http://localhost:5173',
     process.env.FRONTEND_URL,
   ].filter(Boolean),
-  credentials: true,
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key'],
 }))
 
-app.use(express.json({ limit: '2mb' }))
+app.use(express.json({ limit: '256kb' }))
 
 app.get('/health', async (req, res) => {
   try {
@@ -26,11 +43,10 @@ app.get('/health', async (req, res) => {
       message: 'Modo Cafe Pass API funcionando',
       database: 'connected',
     })
-  } catch (error) {
+  } catch {
     return res.status(500).json({
       ok: false,
-      message: 'API ok, pero error conectando a la base de datos',
-      error: error.message,
+      message: 'API disponible, pero la base de datos no responde',
     })
   }
 })
