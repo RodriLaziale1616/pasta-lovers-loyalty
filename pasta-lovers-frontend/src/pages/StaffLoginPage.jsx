@@ -27,52 +27,30 @@ export default function StaffLoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[var(--modo-cream)] px-4 py-8">
-      <div className="w-full max-w-md overflow-hidden rounded-[32px] bg-white shadow-[0_20px_60px_rgba(41,37,31,0.12)] ring-1 ring-black/5">
-        <div className="bg-[var(--modo-ink)] px-6 py-7 text-white">
-          <div className="mb-5 grid h-14 w-14 place-items-center rounded-full bg-[var(--modo-orange)] text-2xl font-black text-[var(--modo-ink)]">M</div>
-          <p className="text-xs font-bold uppercase tracking-[0.22em] text-white/55">Modo Café</p>
+    <div className="flex min-h-screen items-center justify-center bg-[var(--modo-cream)] px-3 py-5 sm:px-5 sm:py-10">
+      <div className="w-full max-w-md overflow-hidden rounded-[26px] bg-white shadow-[0_20px_55px_rgba(69,44,28,.12)] ring-1 ring-black/5">
+        <div className="bg-[var(--modo-card)] px-5 py-6 text-white sm:px-7">
+          <img src="/modo-cafe-logo.jpg" alt="Modo Café" className="h-16 w-auto rounded-xl bg-white object-contain px-2 py-1" />
+          <p className="mt-5 text-[10px] font-black uppercase tracking-[.22em] text-white/50">Modo Café · Mostrador</p>
           <h1 className="mt-1 text-3xl font-black">Pass</h1>
           <p className="mt-2 max-w-xs text-sm leading-6 text-white/60">Acceso interno para vender, consultar y canjear pases prepagados.</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4 p-6">
+        <form onSubmit={handleSubmit} className="space-y-4 p-5 sm:p-7">
           <div>
-            <label className="mb-1.5 block text-sm font-semibold">Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              required
-              autoComplete="email"
-              className="w-full rounded-2xl border border-black/10 bg-[var(--modo-cream)] px-4 py-3.5 outline-none focus:border-[var(--modo-green)] focus:ring-2 focus:ring-[var(--modo-green)]/10"
-              placeholder="tu@email.com"
-            />
+            <label className="mb-1.5 block text-sm font-black">Email</label>
+            <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required autoComplete="email" className="modo-input" placeholder="tu@email.com" />
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm font-semibold">Contraseña</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              required
-              autoComplete="current-password"
-              className="w-full rounded-2xl border border-black/10 bg-[var(--modo-cream)] px-4 py-3.5 outline-none focus:border-[var(--modo-green)] focus:ring-2 focus:ring-[var(--modo-green)]/10"
-              placeholder="••••••••"
-            />
+            <label className="mb-1.5 block text-sm font-black">Contraseña</label>
+            <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required autoComplete="current-password" className="modo-input" placeholder="••••••••" />
           </div>
 
-          {error && (
-            <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
-          )}
+          {error && <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</div>}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-2xl bg-[var(--modo-green)] px-4 py-4 font-black text-white transition hover:bg-[var(--modo-green-dark)] disabled:opacity-50"
-          >
-            {loading ? 'Ingresando...' : 'INGRESAR AL MOSTRADOR'}
+          <button type="submit" disabled={loading} className="modo-btn-primary w-full px-4 py-4 disabled:opacity-50">
+            {loading ? 'INGRESANDO…' : 'INGRESAR AL MOSTRADOR'}
           </button>
         </form>
       </div>
