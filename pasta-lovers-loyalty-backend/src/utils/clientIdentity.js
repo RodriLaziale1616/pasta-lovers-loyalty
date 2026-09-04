@@ -8,6 +8,12 @@ function normalizePhone(value) {
   return digits
 }
 
+function toParaguayE164(value) {
+  const phone = normalizePhone(value)
+  if (!/^09\d{8}$/.test(phone)) return null
+  return `595${phone.slice(1)}`
+}
+
 function normalizeEmail(value) {
   const email = String(value || '').trim().toLowerCase()
   return email || null
@@ -24,6 +30,7 @@ function isValidParaguayPhone(value) {
 
 module.exports = {
   normalizePhone,
+  toParaguayE164,
   normalizeEmail,
   cleanName,
   isValidParaguayPhone,
