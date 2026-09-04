@@ -33,6 +33,15 @@ export async function getPass(publicId, token) {
   return data
 }
 
+export async function resolveDynamicQr(qrValue, token) {
+  const { data } = await api.post(
+    '/passes/resolve-qr',
+    { qrValue },
+    authConfig(token),
+  )
+  return data
+}
+
 export async function redeemPass(publicId, payload = {}, token) {
   const idempotencyKey = payload.idempotencyKey || crypto.randomUUID()
   const { data } = await api.post(
