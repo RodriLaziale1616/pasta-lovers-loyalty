@@ -11,6 +11,7 @@ const {
   getPassByPublicId,
   redeemPass,
 } = require('../controllers/pass.controller')
+const { resolveDynamicQr } = require('../controllers/qr.controller')
 
 const router = express.Router()
 
@@ -21,14 +22,15 @@ const giftClaimLimiter = rateLimit({
   message: 'Demasiados intentos de activación. Esperá unos minutos.',
 })
 
-// Gift activation is public, but protected by a high-entropy one-time token.
+// Activación pública de regalo, protegida por token aleatorio de un solo uso.
 router.get('/gifts/claim/:token', giftPreviewLimiter, previewGift)
 router.post('/gifts/claim/:token', giftClaimLimiter, claimGift)
 
-// Staff-only pass operations.
+// Operaciones internas del mostrador.
 router.get('/products', authMiddleware, listProducts)
 router.post('/products', authMiddleware, requireRole('OWNER', 'MANAGER'), createProduct)
 router.post('/issue', authMiddleware, requireRole('OWNER', 'MANAGER', 'CASHIER'), issuePass)
+router.post('/resolve-qr', authMiddleware, requireRole('OWNER', 'MANAGER', 'CASHIER'), resolveDynamicQr)
 router.get('/:publicId', authMiddleware, requireRole('OWNER', 'MANAGER', 'CASHIER'), getPassByPublicId)
 router.post('/:publicId/redeem', authMiddleware, requireRole('OWNER', 'MANAGER', 'CASHIER'), redeemPass)
 
