@@ -46,10 +46,10 @@ model Client {
   loyaltyTransactions       LoyaltyTransaction[]
   clientViews               ClientView[]
   passes                    Pass[]
+  sessions                  ClientSession[]
 }
 
-// Legacy loyalty models kept temporarily so the original Pasta Lovers flow
-// continues working while Modo Cafe Pass is tested in parallel.
+// Modelos legacy conservados temporalmente mientras la rama Modo Café se valida.
 model LoyaltyStatus {
   id              Int       @id @default(autoincrement())
   clientId        Int       @unique
@@ -152,6 +152,38 @@ model PassTransaction {
 
   @@index([passId, createdAt])
   @@index([createdByUserId, createdAt])
+}
+
+// OTP de corta duración. Nunca se guarda el código en texto plano.
+model ClientOtpChallenge {
+  id          Int       @id @default(autoincrement())
+  phone       String
+  codeHash    String
+  attempts    Int       @default(0)
+  expiresAt   DateTime
+  consumedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([phone, createdAt])
+  @@index([expiresAt])
+}
+
+// Sesión opaca, revocable y asociada a un dispositivo/navegador.
+model ClientSession {
+  id          String    @id @default(uuid())
+  clientId    Int
+  tokenHash   String    @unique
+  userAgent   String?
+  ipAddress   String?
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  lastUsedAt  DateTime  @default(now())
+  createdAt   DateTime  @default(now())
+
+  client      Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, revokedAt])
+  @@index([expiresAt])
 }
 
 model StaffUser {
