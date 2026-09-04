@@ -2,8 +2,11 @@ const { PrismaClient } = require('@prisma/client')
 
 const prisma = new PrismaClient()
 
-async function upsertProduct(product) {
-  const existing = await prisma.passProduct.findFirst({ where: { name: product.name } })
+async function upsertProduct(product, aliases = []) {
+  const names = [product.name, ...aliases]
+  const existing = await prisma.passProduct.findFirst({
+    where: { name: { in: names } },
+  })
 
   if (existing) {
     await prisma.passProduct.update({
@@ -19,45 +22,54 @@ async function upsertProduct(product) {
 async function main() {
   const products = [
     {
-      name: 'Coffee Pass 10',
-      description: '10 cafés prepagados para usar en Modo Café',
-      unitType: 'ITEM',
-      initialUnits: 10,
-      initialAmount: null,
-      salePrice: 120000,
-      currency: 'PYG',
-      validityDays: 90,
-      isGift: false,
-      isActive: true,
+      product: {
+        name: 'Pase de 10 cafés',
+        description: '10 cafés prepagados para disfrutar en Modo Café',
+        unitType: 'ITEM',
+        initialUnits: 10,
+        initialAmount: null,
+        salePrice: 120000,
+        currency: 'PYG',
+        validityDays: 90,
+        isGift: false,
+        isActive: true,
+      },
+      aliases: ['Coffee Pass 10'],
     },
     {
-      name: 'Breakfast Pass 10',
-      description: '10 desayunos prepagados para usar en Modo Café',
-      unitType: 'ITEM',
-      initialUnits: 10,
-      initialAmount: null,
-      salePrice: 280000,
-      currency: 'PYG',
-      validityDays: 90,
-      isGift: false,
-      isActive: true,
+      product: {
+        name: 'Pase de 10 desayunos',
+        description: '10 desayunos prepagados para disfrutar en Modo Café',
+        unitType: 'ITEM',
+        initialUnits: 10,
+        initialAmount: null,
+        salePrice: 280000,
+        currency: 'PYG',
+        validityDays: 90,
+        isGift: false,
+        isActive: true,
+      },
+      aliases: ['Breakfast Pass 10'],
     },
     {
-      name: 'Gift Pass 150.000',
-      description: 'Gs. 150.000 de saldo para regalar y activar después',
-      unitType: 'MONEY',
-      initialUnits: null,
-      initialAmount: 150000,
-      salePrice: 150000,
-      currency: 'PYG',
-      validityDays: 180,
-      isGift: true,
-      isActive: true,
+      product: {
+        name: 'Gift Pass · Gs. 150.000',
+        description: 'Gs. 150.000 de saldo para regalar y activar después',
+        unitType: 'MONEY',
+        initialUnits: null,
+        initialAmount: 150000,
+        salePrice: 150000,
+        currency: 'PYG',
+        validityDays: 180,
+        isGift: true,
+        isActive: true,
+      },
+      aliases: ['Gift Pass 150.000'],
     },
   ]
 
-  for (const product of products) {
-    await upsertProduct(product)
+  for (const item of products) {
+    await upsertProduct(item.product, item.aliases)
   }
 }
 
