@@ -1,27 +1,18 @@
-const express = require('express');
-const router = express.Router();
+const express = require('express')
+const router = express.Router()
 
-const authMiddleware = require('../middleware/auth.middleware');
-
+const authMiddleware = require('../middleware/auth.middleware')
+const requireRole = require('../middleware/role.middleware')
+const { searchClients } = require('../controllers/client.controller')
 const {
-  registerClient,
-  getClientCardByToken,
-  getClientByTokenForStaff,
-  checkinClient,
-  redeemClientReward,
-  searchClients,
-  getClientHistory,
-  recoverClientCard,
-} = require('../controllers/client.controller');
+  registerStaffClient,
+  listClientPasses,
+} = require('../controllers/modoClient.controller')
 
-router.post('/register', registerClient);
-router.get('/card/:token', getClientCardByToken);
+router.use(authMiddleware)
 
-router.get('/staff/by-token/:token', authMiddleware, getClientByTokenForStaff);
-router.post('/:id/checkin', authMiddleware, checkinClient);
-router.post('/:id/redeem', authMiddleware, redeemClientReward);
-router.get('/search', authMiddleware, searchClients)
-router.get('/:id/history', authMiddleware, getClientHistory);
-router.post('/recover-card', recoverClientCard);
+router.post('/staff/register', requireRole('OWNER', 'MANAGER', 'CASHIER'), registerStaffClient)
+router.get('/search', requireRole('OWNER', 'MANAGER', 'CASHIER'), searchClients)
+router.get('/:id/passes', requireRole('OWNER', 'MANAGER', 'CASHIER'), listClientPasses)
 
-module.exports = router;
+module.exports = router

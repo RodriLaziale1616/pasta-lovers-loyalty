@@ -7,6 +7,29 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum PassStatus {
+  UNCLAIMED
+  ACTIVE
+  EXHAUSTED
+  EXPIRED
+  BLOCKED
+  CANCELLED
+}
+
+enum PassUnitType {
+  ITEM
+  MONEY
+}
+
+enum PassTransactionType {
+  PURCHASE
+  CLAIM
+  REDEEM
+  REFUND
+  ADJUSTMENT
+  REVERSAL
+}
+
 model Client {
   id                        Int                  @id @default(autoincrement())
   name                      String
@@ -22,8 +45,11 @@ model Client {
   loyaltyStatus             LoyaltyStatus?
   loyaltyTransactions       LoyaltyTransaction[]
   clientViews               ClientView[]
+  passes                    Pass[]
+  sessions                  ClientSession[]
 }
 
+// Modelos legacy conservados temporalmente mientras la rama Modo Café se valida.
 model LoyaltyStatus {
   id              Int       @id @default(autoincrement())
   clientId        Int       @unique
@@ -51,6 +77,115 @@ model LoyaltyTransaction {
   createdByUser    StaffUser? @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
 }
 
+model PassProduct {
+  id              Int          @id @default(autoincrement())
+  name            String
+  description     String?
+  unitType        PassUnitType @default(ITEM)
+  initialUnits    Int?
+  initialAmount   Int?
+  salePrice       Int
+  currency        String       @default("PYG")
+  validityDays    Int?
+  isGift          Boolean      @default(false)
+  isActive        Boolean      @default(true)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  passes          Pass[]
+
+  @@index([isActive])
+  @@index([isGift, isActive])
+}
+
+model Pass {
+  id              Int          @id @default(autoincrement())
+  publicId        String       @unique
+  clientId        Int?
+  productId       Int
+  status          PassStatus   @default(ACTIVE)
+  unitType        PassUnitType
+  initialUnits    Int?
+  remainingUnits  Int?
+  initialAmount   Int?
+  remainingAmount Int?
+  purchasedAt     DateTime     @default(now())
+  expiresAt       DateTime?
+  blockedAt       DateTime?
+  cancelledAt     DateTime?
+  claimTokenHash  String?      @unique
+  claimExpiresAt  DateTime?
+  claimedAt       DateTime?
+  purchaserName   String?
+  purchaserPhone  String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  client          Client?      @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  product         PassProduct  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  transactions    PassTransaction[]
+
+  @@index([clientId, status])
+  @@index([productId, status])
+  @@index([expiresAt])
+  @@index([claimExpiresAt])
+}
+
+model PassTransaction {
+  id                 Int                 @id @default(autoincrement())
+  passId             Int
+  type               PassTransactionType
+  unitsDelta         Int?
+  amountDelta        Int?
+  balanceUnitsAfter  Int?
+  balanceAmountAfter Int?
+  idempotencyKey     String              @unique
+  notes              String?
+  createdByUserId    Int?
+  reversedById       Int?                @unique
+  createdAt          DateTime            @default(now())
+
+  pass               Pass                @relation(fields: [passId], references: [id], onDelete: Restrict)
+  createdByUser      StaffUser?          @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  reversalOf         PassTransaction?    @relation("TransactionReversal", fields: [reversedById], references: [id])
+  reversedBy         PassTransaction?    @relation("TransactionReversal")
+
+  @@index([passId, createdAt])
+  @@index([createdByUserId, createdAt])
+}
+
+// OTP de corta duración. Nunca se guarda el código en texto plano.
+model ClientOtpChallenge {
+  id          Int       @id @default(autoincrement())
+  phone       String
+  codeHash    String
+  attempts    Int       @default(0)
+  expiresAt   DateTime
+  consumedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([phone, createdAt])
+  @@index([expiresAt])
+}
+
+// Sesión opaca, revocable y asociada a un dispositivo/navegador.
+model ClientSession {
+  id          String    @id @default(uuid())
+  clientId    Int
+  tokenHash   String    @unique
+  userAgent   String?
+  ipAddress   String?
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  lastUsedAt  DateTime  @default(now())
+  createdAt   DateTime  @default(now())
+
+  client      Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, revokedAt])
+  @@index([expiresAt])
+}
+
 model StaffUser {
   id                  Int                  @id @default(autoincrement())
   name                String
@@ -62,6 +197,7 @@ model StaffUser {
   updatedAt           DateTime             @updatedAt
 
   loyaltyTransactions LoyaltyTransaction[]
+  passTransactions    PassTransaction[]
   promotions          Promotion[]
 }
 

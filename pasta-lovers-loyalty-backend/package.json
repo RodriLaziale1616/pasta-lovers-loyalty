@@ -4,10 +4,14 @@
   "main": "src/server.js",
   "scripts": {
     "dev": "nodemon src/server.js",
-    "start": "node src/server.js",
+    "postinstall": "prisma generate",
+    "start": "npm run prisma:deploy && npm run seed:modo && npm run seed:admin && node src/server.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:studio": "prisma studio"
+    "prisma:deploy": "prisma migrate deploy",
+    "prisma:studio": "prisma studio",
+    "seed:modo": "node prisma/seed/modoCafePass.seed.js",
+    "seed:admin": "node prisma/seed/createAdmin.js"
   },
   "devDependencies": {
     "nodemon": "^3.1.14",
