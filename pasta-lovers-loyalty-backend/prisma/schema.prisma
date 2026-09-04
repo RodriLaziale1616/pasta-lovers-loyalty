@@ -7,6 +7,27 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum PassStatus {
+  ACTIVE
+  EXHAUSTED
+  EXPIRED
+  BLOCKED
+  CANCELLED
+}
+
+enum PassUnitType {
+  ITEM
+  MONEY
+}
+
+enum PassTransactionType {
+  PURCHASE
+  REDEEM
+  REFUND
+  ADJUSTMENT
+  REVERSAL
+}
+
 model Client {
   id                        Int                  @id @default(autoincrement())
   name                      String
@@ -22,8 +43,11 @@ model Client {
   loyaltyStatus             LoyaltyStatus?
   loyaltyTransactions       LoyaltyTransaction[]
   clientViews               ClientView[]
+  passes                    Pass[]
 }
 
+// Legacy loyalty models kept temporarily so the original Pasta Lovers flow
+// continues working while Modo Cafe Pass is tested in parallel.
 model LoyaltyStatus {
   id              Int       @id @default(autoincrement())
   clientId        Int       @unique
@@ -51,6 +75,75 @@ model LoyaltyTransaction {
   createdByUser    StaffUser? @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
 }
 
+model PassProduct {
+  id              Int          @id @default(autoincrement())
+  name            String
+  description     String?
+  unitType        PassUnitType @default(ITEM)
+  initialUnits    Int?
+  initialAmount   Int?
+  salePrice       Int
+  currency        String       @default("PYG")
+  validityDays    Int?
+  isActive        Boolean      @default(true)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  passes          Pass[]
+
+  @@index([isActive])
+}
+
+model Pass {
+  id              Int          @id @default(autoincrement())
+  publicId        String       @unique
+  clientId        Int
+  productId       Int
+  status          PassStatus   @default(ACTIVE)
+  unitType        PassUnitType
+  initialUnits    Int?
+  remainingUnits  Int?
+  initialAmount   Int?
+  remainingAmount Int?
+  purchasedAt     DateTime     @default(now())
+  expiresAt       DateTime?
+  blockedAt       DateTime?
+  cancelledAt     DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  client          Client       @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  product         PassProduct  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  transactions    PassTransaction[]
+
+  @@index([clientId, status])
+  @@index([productId, status])
+  @@index([expiresAt])
+}
+
+model PassTransaction {
+  id               Int                 @id @default(autoincrement())
+  passId           Int
+  type             PassTransactionType
+  unitsDelta       Int?
+  amountDelta      Int?
+  balanceUnitsAfter Int?
+  balanceAmountAfter Int?
+  idempotencyKey   String              @unique
+  notes            String?
+  createdByUserId  Int?
+  reversedById     Int?                @unique
+  createdAt        DateTime            @default(now())
+
+  pass             Pass                @relation(fields: [passId], references: [id], onDelete: Restrict)
+  createdByUser    StaffUser?          @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  reversalOf       PassTransaction?    @relation("TransactionReversal", fields: [reversedById], references: [id])
+  reversedBy       PassTransaction?    @relation("TransactionReversal")
+
+  @@index([passId, createdAt])
+  @@index([createdByUserId, createdAt])
+}
+
 model StaffUser {
   id                  Int                  @id @default(autoincrement())
   name                String
@@ -62,6 +155,7 @@ model StaffUser {
   updatedAt           DateTime             @updatedAt
 
   loyaltyTransactions LoyaltyTransaction[]
+  passTransactions    PassTransaction[]
   promotions          Promotion[]
 }
 
