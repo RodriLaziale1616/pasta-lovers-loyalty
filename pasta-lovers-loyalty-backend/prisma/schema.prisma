@@ -47,6 +47,8 @@ model Client {
   clientViews               ClientView[]
   passes                    Pass[]
   sessions                  ClientSession[]
+  passkeys                  ClientPasskey[]
+  webAuthnChallenges        ClientWebAuthnChallenge[]
 }
 
 // Modelos legacy conservados temporalmente mientras la rama Modo Café se valida.
@@ -183,6 +185,42 @@ model ClientSession {
   client      Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
   @@index([clientId, revokedAt])
+  @@index([expiresAt])
+}
+
+// Credencial WebAuthn. Solo se guarda la clave pública; la biometría nunca sale del dispositivo.
+model ClientPasskey {
+  id          String    @id @default(uuid())
+  clientId    Int
+  credentialId String   @unique
+  publicKey   Bytes
+  counter     Int       @default(0)
+  transports  String[]  @default([])
+  deviceType  String?
+  backedUp    Boolean   @default(false)
+  label       String?
+  lastUsedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  client      Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, createdAt])
+}
+
+// Challenge WebAuthn de corta duración y un solo uso.
+model ClientWebAuthnChallenge {
+  id          String    @id @default(uuid())
+  clientId    Int
+  type        String
+  challenge   String
+  expiresAt   DateTime
+  consumedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  client      Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, type, createdAt])
   @@index([expiresAt])
 }
 
