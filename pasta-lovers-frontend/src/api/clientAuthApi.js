@@ -36,3 +36,37 @@ export async function createClientQr(publicId, token) {
   const { data } = await api.post('/client-auth/qr', { publicId }, authConfig(token))
   return data
 }
+
+export async function listClientPasskeys(token) {
+  const { data } = await api.get('/client-auth/passkeys', authConfig(token))
+  return data
+}
+
+export async function getPasskeyRegistrationOptions(token) {
+  const { data } = await api.post('/client-auth/passkeys/register/options', {}, authConfig(token))
+  return data
+}
+
+export async function verifyPasskeyRegistration(response, token, label = '') {
+  const { data } = await api.post(
+    '/client-auth/passkeys/register/verify',
+    { response, label },
+    authConfig(token),
+  )
+  return data
+}
+
+export async function getPasskeyAuthenticationOptions(phone) {
+  const { data } = await api.post('/client-auth/passkeys/auth/options', { phone })
+  return data
+}
+
+export async function verifyPasskeyAuthentication(phone, response) {
+  const { data } = await api.post('/client-auth/passkeys/auth/verify', { phone, response })
+  return data
+}
+
+export async function deleteClientPasskey(id, token) {
+  const { data } = await api.delete(`/client-auth/passkeys/${encodeURIComponent(id)}`, authConfig(token))
+  return data
+}
