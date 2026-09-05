@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react'
+import { browserSupportsWebAuthn, startAuthentication } from '@simplewebauthn/browser'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { requestClientOtp, verifyClientOtp } from '../api/clientAuthApi'
+import {
+  getPasskeyAuthenticationOptions,
+  requestClientOtp,
+  verifyClientOtp,
+  verifyPasskeyAuthentication,
+} from '../api/clientAuthApi'
 import { getClientSessionToken, saveClientSessionToken } from '../utils/clientSession'
 
 export default function ClientAccessPage() {
@@ -10,15 +16,21 @@ export default function ClientAccessPage() {
   const [code, setCode] = useState('')
   const [step, setStep] = useState('phone')
   const [loading, setLoading] = useState(false)
+  const [passkeyLoading, setPasskeyLoading] = useState(false)
+  const [passkeySupported, setPasskeySupported] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
 
   useEffect(() => {
-    if (getClientSessionToken()) navigate('/mi-pase', { replace: true })
+    if (getClientSessionToken()) {
+      navigate('/mi-pase', { replace: true })
+      return
+    }
+    setPasskeySupported(browserSupportsWebAuthn())
   }, [navigate])
 
   async function handleRequest(event) {
-    event.preventDefault()
+    event?.preventDefault?.()
     try {
       setLoading(true)
       setError('')
@@ -47,18 +59,44 @@ export default function ClientAccessPage() {
     }
   }
 
+  async function handlePasskeyLogin() {
+    if (!phone.trim()) {
+      setError('Ingresá primero tu número de teléfono.')
+      return
+    }
+
+    try {
+      setPasskeyLoading(true)
+      setError('')
+      setMessage('')
+      const begin = await getPasskeyAuthenticationOptions(phone)
+      const response = await startAuthentication({ optionsJSON: begin.options })
+      const data = await verifyPasskeyAuthentication(phone, response)
+      saveClientSessionToken(data.token)
+      navigate('/mi-pase', { replace: true })
+    } catch (err) {
+      if (err?.name === 'NotAllowedError') {
+        setError('El acceso rápido fue cancelado o no pudo verificarse en este dispositivo.')
+      } else {
+        setError(err?.response?.data?.message || err?.message || 'No pudimos usar el acceso biométrico.')
+      }
+    } finally {
+      setPasskeyLoading(false)
+    }
+  }
+
   return (
     <main className="min-h-screen px-3 py-5 sm:px-5 sm:py-10">
       <div className="mx-auto w-full max-w-md overflow-hidden rounded-[26px] bg-white shadow-[0_20px_50px_rgba(69,44,28,.12)] ring-1 ring-black/5">
-        <div className="bg-[var(--modo-card)] px-5 py-6 text-white sm:px-7">
+        <div className="border-b border-[var(--modo-red)]/10 bg-[var(--modo-cream)] px-5 py-6 sm:px-7">
           <img
             src="/modo-cafe-logo.jpg"
             alt="Modo Café"
-            className="h-16 w-auto rounded-xl bg-white object-contain px-2 py-1"
+            className="h-16 w-auto object-contain mix-blend-multiply"
           />
-          <p className="mt-5 text-[11px] font-black uppercase tracking-[.22em] text-white/55">Tu cuenta Modo Café</p>
-          <h1 className="mt-1 text-3xl font-black">Entrá a tus pases</h1>
-          <p className="mt-2 text-sm leading-6 text-white/65">Sin contraseña. Usamos tu teléfono y un código de verificación.</p>
+          <p className="mt-5 text-[11px] font-black uppercase tracking-[.22em] text-[var(--modo-red)]">Tu cuenta Modo Café</p>
+          <h1 className="mt-1 text-3xl font-black text-[var(--modo-brown)]">Entrá a tus pases</h1>
+          <p className="mt-2 text-sm leading-6 text-black/55">Usá tu acceso rápido o recibí un código en tu teléfono.</p>
         </div>
 
         <div className="p-5 sm:p-7">
@@ -73,10 +111,31 @@ export default function ClientAccessPage() {
                 value={phone}
                 onChange={(event) => setPhone(event.target.value)}
                 inputMode="tel"
+                autoComplete="tel webauthn"
                 placeholder="0981 123 456"
                 className="modo-input mt-2"
               />
-              <button disabled={loading} className="modo-btn-primary mt-4 w-full px-4 py-3.5 disabled:opacity-50">
+
+              {passkeySupported && (
+                <button
+                  type="button"
+                  onClick={handlePasskeyLogin}
+                  disabled={passkeyLoading || loading}
+                  className="modo-btn-primary mt-4 w-full px-4 py-3.5 disabled:opacity-50"
+                >
+                  {passkeyLoading ? 'VERIFICANDO…' : '🔐 ENTRAR CON HUELLA / FACE ID'}
+                </button>
+              )}
+
+              {passkeySupported && (
+                <div className="my-4 flex items-center gap-3 text-[11px] font-black uppercase tracking-[.15em] text-black/30">
+                  <span className="h-px flex-1 bg-black/10" />
+                  o con código
+                  <span className="h-px flex-1 bg-black/10" />
+                </div>
+              )}
+
+              <button disabled={loading || passkeyLoading} className="w-full rounded-[15px] bg-[var(--modo-beige)] px-4 py-3.5 font-black text-[var(--modo-brown)] disabled:opacity-50">
                 {loading ? 'ENVIANDO…' : 'RECIBIR CÓDIGO'}
               </button>
             </form>
@@ -106,7 +165,7 @@ export default function ClientAccessPage() {
             </form>
           )}
 
-          <p className="mt-6 text-center text-xs leading-5 text-black/40">Tu saldo nunca se guarda en el teléfono. Cada pase se valida directamente con Modo Café.</p>
+          <p className="mt-6 text-center text-xs leading-5 text-black/40">Modo Café nunca recibe tu huella ni tu Face ID. El dispositivo solo confirma que sos vos.</p>
         </div>
       </div>
     </main>
