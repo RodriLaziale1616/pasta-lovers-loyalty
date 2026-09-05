@@ -133,16 +133,25 @@ export default function MyPassesPage() {
 
   return (
     <div className="min-h-screen pb-8">
-      <header className="bg-[var(--modo-card)] text-white">
-        <div className="modo-shell flex min-h-[82px] items-center justify-between gap-3 py-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <img src="/modo-cafe-logo.jpg" alt="Modo Café" className="h-12 w-[84px] shrink-0 rounded-lg bg-white object-contain px-1.5" />
-            <div className="min-w-0">
-              <p className="text-[10px] font-black uppercase tracking-[.2em] text-white/50">Mi cuenta</p>
-              <h1 className="truncate text-lg font-black">Hola, {client?.name?.split(' ')[0]}</h1>
+      <header className="border-b border-[var(--modo-red)]/10 bg-[var(--modo-cream)]">
+        <div className="modo-shell flex min-h-[78px] items-center justify-between gap-3 py-2">
+          <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+            <img
+              src="/modo-cafe-logo.jpg"
+              alt="Modo Café"
+              className="h-14 w-24 shrink-0 object-contain mix-blend-multiply sm:h-16 sm:w-28"
+            />
+            <div className="min-w-0 border-l border-[var(--modo-red)]/15 pl-3 sm:pl-4">
+              <p className="text-[9px] font-black uppercase tracking-[.2em] text-[var(--modo-red)] sm:text-[10px]">Mi cuenta · Modo Café Pass</p>
+              <h1 className="truncate text-lg font-black text-[var(--modo-brown)] sm:text-xl">Hola, {client?.name?.split(' ')[0]}</h1>
             </div>
           </div>
-          <button onClick={handleLogout} className="shrink-0 rounded-xl border border-white/15 px-3 py-2 text-xs font-black">SALIR</button>
+          <button
+            onClick={handleLogout}
+            className="shrink-0 rounded-xl border border-[var(--modo-brown)]/15 bg-white/55 px-3 py-2 text-[11px] font-black text-[var(--modo-brown)] transition hover:border-[var(--modo-red)]/30 hover:text-[var(--modo-red)]"
+          >
+            SALIR
+          </button>
         </div>
       </header>
 
@@ -193,15 +202,15 @@ export default function MyPassesPage() {
                 <div className="border-b border-white/10 p-5 sm:p-6">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-[10px] font-black uppercase tracking-[.2em] text-white/45">Modo Café Pass</p>
+                      <p className="text-[10px] font-black uppercase tracking-[.2em] text-white/50">Modo Café Pass</p>
                       <h2 className="mt-1 text-xl font-black">{selectedPass.product?.name}</h2>
                     </div>
                     <span className="rounded-full bg-[var(--modo-red)] px-3 py-1 text-[10px] font-black uppercase text-white">{STATUS_LABEL[selectedPass.status] || selectedPass.status}</span>
                   </div>
-                  <p className="mt-5 text-xs uppercase tracking-[.18em] text-white/40">Saldo disponible</p>
+                  <p className="mt-5 text-xs uppercase tracking-[.18em] text-white/45">Saldo disponible</p>
                   <p className="mt-1 text-4xl font-black">{balance(selectedPass)}</p>
                   {selectedPass.expiresAt && (
-                    <p className="mt-2 text-xs text-white/45">Vence el {new Date(selectedPass.expiresAt).toLocaleDateString('es-PY')}</p>
+                    <p className="mt-2 text-xs text-white/55">Vence el {new Date(selectedPass.expiresAt).toLocaleDateString('es-PY')}</p>
                   )}
                 </div>
 
@@ -213,14 +222,14 @@ export default function MyPassesPage() {
                           <QRCodeSVG value={qr.qrValue} size={210} level="M" />
                         </div>
                         <p className="mt-4 text-sm font-bold">Mostrá este QR en caja</p>
-                        <p className="mt-1 text-xs text-white/45">Se renueva automáticamente · vence en {seconds}s</p>
+                        <p className="mt-1 text-xs text-white/55">Se renueva automáticamente · vence en {seconds}s</p>
                         <button onClick={generateQr} className="modo-btn-secondary mt-4 px-4 py-2.5 text-sm">RENOVAR QR</button>
                       </div>
                     ) : (
                       <div className="text-center">
                         <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-white/8 text-3xl">▦</div>
                         <p className="mt-3 font-black">QR seguro de corta duración</p>
-                        <p className="mx-auto mt-1 max-w-xs text-sm leading-6 text-white/50">Generalo cuando estés en caja. Una captura vieja deja de funcionar.</p>
+                        <p className="mx-auto mt-1 max-w-xs text-sm leading-6 text-white/60">Generalo cuando estés en caja. Una captura vieja deja de funcionar.</p>
                         <button onClick={generateQr} className="modo-btn-primary mt-5 px-5 py-3">MOSTRAR MI QR</button>
                       </div>
                     )
@@ -236,7 +245,7 @@ export default function MyPassesPage() {
                           <div key={item.id} className="flex items-center justify-between gap-3 rounded-xl bg-white/5 px-3 py-2.5">
                             <div>
                               <p className="text-sm font-bold">{TYPE_LABEL[item.type] || item.type}</p>
-                              <p className="text-[11px] text-white/40">{new Date(item.createdAt).toLocaleString('es-PY')}</p>
+                              <p className="text-[11px] text-white/50">{new Date(item.createdAt).toLocaleString('es-PY')}</p>
                             </div>
                             <span className="font-black">{movementDelta(item, selectedPass)}</span>
                           </div>
