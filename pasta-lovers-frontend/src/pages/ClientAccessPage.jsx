@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { browserSupportsWebAuthn, startAuthentication } from '@simplewebauthn/browser'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import PasskeyManager from '../components/PasskeyManager'
 import {
   getPasskeyAuthenticationOptions,
   requestClientOtp,
@@ -15,6 +16,7 @@ export default function ClientAccessPage() {
   const [phone, setPhone] = useState(params.get('phone') || '')
   const [code, setCode] = useState('')
   const [step, setStep] = useState('phone')
+  const [sessionToken, setSessionToken] = useState('')
   const [loading, setLoading] = useState(false)
   const [passkeyLoading, setPasskeyLoading] = useState(false)
   const [passkeySupported, setPasskeySupported] = useState(false)
@@ -51,7 +53,9 @@ export default function ClientAccessPage() {
       setError('')
       const data = await verifyClientOtp(phone, code)
       saveClientSessionToken(data.token)
-      navigate('/mi-pase', { replace: true })
+      setSessionToken(data.token)
+      setMessage('Código correcto. Podés activar un acceso rápido en este dispositivo.')
+      setStep('passkeyOffer')
     } catch (err) {
       setError(err?.response?.data?.message || 'No pudimos validar el código.')
     } finally {
@@ -83,6 +87,31 @@ export default function ClientAccessPage() {
     } finally {
       setPasskeyLoading(false)
     }
+  }
+
+  if (step === 'passkeyOffer' && sessionToken) {
+    return (
+      <main className="min-h-screen px-3 py-5 sm:px-5 sm:py-10">
+        <div className="mx-auto w-full max-w-2xl">
+          <div className="mb-4 rounded-[26px] border border-[var(--modo-red)]/10 bg-[var(--modo-cream)] p-5 shadow-[0_20px_50px_rgba(69,44,28,.08)] sm:p-7">
+            <img src="/modo-cafe-logo.jpg" alt="Modo Café" className="h-16 w-auto object-contain mix-blend-multiply" />
+            <p className="mt-4 text-[11px] font-black uppercase tracking-[.22em] text-[var(--modo-red)]">Acceso confirmado</p>
+            <h1 className="mt-1 text-3xl font-black text-[var(--modo-brown)]">¿Querés entrar más rápido la próxima vez?</h1>
+            <p className="mt-2 max-w-xl text-sm leading-6 text-black/55">Activá una Passkey y usá huella, Face ID o el desbloqueo seguro de tu dispositivo. El código OTP sigue quedando disponible como respaldo.</p>
+          </div>
+
+          <PasskeyManager token={sessionToken} />
+
+          <button
+            type="button"
+            onClick={() => navigate('/mi-pase', { replace: true })}
+            className="w-full rounded-[15px] bg-[var(--modo-beige)] px-4 py-3.5 font-black text-[var(--modo-brown)]"
+          >
+            CONTINUAR A MI PASE
+          </button>
+        </div>
+      </main>
+    )
   }
 
   return (
