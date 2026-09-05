@@ -2,27 +2,20 @@ const { PrismaClient } = require('@prisma/client')
 
 const prisma = new PrismaClient()
 
-async function upsertProduct(product, aliases = []) {
-  const names = [product.name, ...aliases]
-  const existing = await prisma.passProduct.findFirst({
-    where: { name: { in: names } },
-  })
+async function main() {
+  const existingCount = await prisma.passProduct.count()
 
-  if (existing) {
-    await prisma.passProduct.update({
-      where: { id: existing.id },
-      data: product,
-    })
+  // El catálogo inicial se crea una sola vez. Después, el panel Productos pasa a
+  // ser la fuente de configuración para que un deploy nunca pise precios,
+  // vigencias, nombres o estados definidos desde el negocio.
+  if (existingCount > 0) {
+    console.log(`Modo Café Pass: catálogo existente (${existingCount} productos), seed omitido.`)
     return
   }
 
-  await prisma.passProduct.create({ data: product })
-}
-
-async function main() {
-  const products = [
-    {
-      product: {
+  await prisma.passProduct.createMany({
+    data: [
+      {
         name: 'Pase de 10 cafés',
         description: '10 cafés prepagados para disfrutar en Modo Café',
         unitType: 'ITEM',
@@ -34,10 +27,7 @@ async function main() {
         isGift: false,
         isActive: true,
       },
-      aliases: ['Coffee Pass 10'],
-    },
-    {
-      product: {
+      {
         name: 'Pase de 10 desayunos',
         description: '10 desayunos prepagados para disfrutar en Modo Café',
         unitType: 'ITEM',
@@ -49,10 +39,7 @@ async function main() {
         isGift: false,
         isActive: true,
       },
-      aliases: ['Breakfast Pass 10'],
-    },
-    {
-      product: {
+      {
         name: 'Gift Pass · Gs. 150.000',
         description: 'Gs. 150.000 de saldo para regalar y activar después',
         unitType: 'MONEY',
@@ -64,13 +51,10 @@ async function main() {
         isGift: true,
         isActive: true,
       },
-      aliases: ['Gift Pass 150.000'],
-    },
-  ]
+    ],
+  })
 
-  for (const item of products) {
-    await upsertProduct(item.product, item.aliases)
-  }
+  console.log('Modo Café Pass: catálogo inicial creado.')
 }
 
 main()
