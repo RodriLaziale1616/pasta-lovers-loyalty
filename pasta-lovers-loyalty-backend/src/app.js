@@ -30,7 +30,7 @@ app.use(cors({
     'http://localhost:5173',
     process.env.FRONTEND_URL,
   ].filter(Boolean),
-  methods: ['GET', 'POST', 'OPTIONS'],
+  methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key'],
 }))
 
