@@ -18,8 +18,23 @@ export async function listPassProducts(token) {
   return data
 }
 
+export async function listManagedPassProducts(token) {
+  const { data } = await api.get('/passes/products/manage', authConfig(token))
+  return data
+}
+
 export async function createPassProduct(payload, token) {
   const { data } = await api.post('/passes/products', payload, authConfig(token))
+  return data
+}
+
+export async function updatePassProduct(id, payload, token) {
+  const { data } = await api.post(`/passes/products/${id}/update`, payload, authConfig(token))
+  return data
+}
+
+export async function setPassProductActive(id, isActive, token) {
+  const { data } = await api.post(`/passes/products/${id}/status`, { isActive }, authConfig(token))
   return data
 }
 
