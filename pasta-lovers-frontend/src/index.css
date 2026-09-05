@@ -9,7 +9,7 @@
   --modo-brown: #5a4032;
   --modo-ink: #2b211b;
   --modo-muted: #776b62;
-  --modo-card: #28211b;
+  --modo-card: #4a3027;
   --modo-success: #2f6d49;
 
   /* aliases temporales mientras se termina de migrar cualquier vista legacy */
@@ -77,9 +77,11 @@ img {
 
 .modo-premium-card {
   border-radius: 24px;
-  background: var(--modo-card);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(197, 31, 41, 0.18), transparent 30%),
+    var(--modo-card);
   color: white;
-  box-shadow: 0 18px 40px rgba(43, 33, 27, 0.16);
+  box-shadow: 0 18px 40px rgba(74, 48, 39, 0.18);
 }
 
 .modo-btn-primary {
