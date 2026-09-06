@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import { useNavigate } from 'react-router-dom'
 import { createClientQr, getClientMe, logoutClient } from '../api/clientAuthApi'
+import PasskeyManager from '../components/PasskeyManager'
 import { getClientSessionToken, removeClientSessionToken } from '../utils/clientSession'
 
 const STATUS_LABEL = {
@@ -157,6 +158,8 @@ export default function MyPassesPage() {
 
       <main className="modo-shell pt-4 sm:pt-6">
         {error && <div className="mb-4 rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700 ring-1 ring-red-200">{error}</div>}
+
+        <PasskeyManager token={token} />
 
         {!client?.passes?.length ? (
           <section className="modo-card p-6 text-center">
